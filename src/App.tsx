@@ -6,6 +6,7 @@ import type { JSX } from "react";
 import ProductsPage from "./pages/ProductsPage";
 import ProductFormPage from "./pages/ProductFormPage";
 import { CategoriesProvider } from "./context/CategoriesContext";
+import OrdersPage from "./pages/OrdersPage";
 
 const ProtectedRoute = ({ children }: { children: JSX.Element }) => {
   const { user, loading } = useAuth();
@@ -53,6 +54,14 @@ export default function App() {
             element={
               <ProtectedRoute>
                 <ProductFormPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/orders"
+            element={
+              <ProtectedRoute>
+                <OrdersPage/>
               </ProtectedRoute>
             }
           />

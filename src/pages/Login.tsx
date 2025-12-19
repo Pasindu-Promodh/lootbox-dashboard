@@ -10,8 +10,8 @@ export default function Login() {
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
-        //   redirectTo: `https://pasindu-promodh.github.io/lootbox/`,
-        redirectTo: `http://localhost:5174`,
+        redirectTo: `https://pasindu-promodh.github.io/lootbox-dashboard/`,
+        // redirectTo: `http://localhost:5174`,
         queryParams: {
           // access_type: 'offline',
           // prompt: 'consent',
