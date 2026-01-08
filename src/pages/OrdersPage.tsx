@@ -1,19 +1,33 @@
 import {
   Box,
   Typography,
-  CircularProgress,
-  Card,
-  CardContent,
+  Button,
+  TextField,
+  IconButton,
   Chip,
-  Divider,
-  Select,
-  MenuItem,
+  Checkbox,
+  FormControlLabel,
+  FormGroup,
 } from "@mui/material";
-import { useEffect, useState } from "react";
+import VisibilityIcon from "@mui/icons-material/Visibility";
+import { DataGrid, type GridColDef } from "@mui/x-data-grid";
+import { useEffect, useMemo, useState } from "react";
+import { fetchAllOrders } from "../services/orders";
 import type { Order, OrderStatus } from "../types/order";
-import { supabase } from "../lib/supabase";
+import OrderDetailPage from "./OrderDetailPage";
+import { useNavigate } from "react-router-dom";
 
-const statusColors: Record<
+const ALL_STATUSES: OrderStatus[] = [
+  "pending",
+  "processing",
+  "shipped",
+  "delivered",
+  "cancelled",
+];
+
+const SELECTED_STATUSES: OrderStatus[] = ["pending"];
+
+const STATUS_COLORS: Record<
   OrderStatus,
   "default" | "warning" | "info" | "success" | "error"
 > = {
@@ -25,9 +39,13 @@ const statusColors: Record<
 };
 
 export default function OrdersPage() {
+  const navigate = useNavigate();
   const [orders, setOrders] = useState<Order[]>([]);
-  const [productMap, setProductMap] = useState<Record<string, any>>({});
   const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState("");
+  const [selectedStatuses, setSelectedStatuses] =
+    useState<OrderStatus[]>(SELECTED_STATUSES);
+  const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
 
   useEffect(() => {
     loadOrders();
@@ -35,167 +53,183 @@ export default function OrdersPage() {
 
   const loadOrders = async () => {
     setLoading(true);
-
-    const { data: ordersData, error } = await supabase
-      .from("orders")
-      .select("*")
-      .order("created_at", { ascending: false });
-
-    if (error) {
-      setLoading(false);
-      return;
-    }
-
-    setOrders(ordersData || []);
-
-    const productIds = Array.from(
-      new Set(ordersData?.flatMap((o) => o.items.map((i: any) => i.product_id)))
-    );
-
-    if (productIds.length) {
-      const { data: products } = await supabase
-        .from("products")
-        .select("id, name, images")
-        .in("id", productIds);
-
-      const map: Record<string, any> = {};
-      products?.forEach((p) => (map[p.id] = p));
-      setProductMap(map);
-    }
-
+    const data = await fetchAllOrders();
+    setOrders(data);
     setLoading(false);
   };
 
-  const updateStatus = async (orderId: string, status: OrderStatus) => {
-    const order = orders.find((o) => o.id === orderId);
-    if (!order) return;
+  const filteredOrders = useMemo(() => {
+    return orders.filter((o) => {
+      const matchesSearch =
+        o.id.toLowerCase().includes(search.toLowerCase()) ||
+        o.customer_name.toLowerCase().includes(search.toLowerCase()) ||
+        o.phone1.includes(search);
 
-    const newLog = [
-      ...order.status_log,
-      { status, at: new Date().toISOString() },
-    ];
+      const matchesStatus = selectedStatuses.includes(o.status as OrderStatus);
 
-    await supabase
-      .from("orders")
-      .update({
-        status_log: newLog,
-      })
-      .eq("id", orderId);
+      return matchesSearch && matchesStatus;
+    });
+  }, [orders, search, selectedStatuses]);
 
-    loadOrders();
-  };
-
-  if (loading) {
-    return (
-      <Box py={6} display="flex" justifyContent="center">
-        <CircularProgress />
-      </Box>
-    );
-  }
+  const columns: GridColDef[] = [
+    {
+      field: "id",
+      headerName: "Order ID",
+      width: 140,
+      renderCell: (params) => (
+        <Typography fontWeight={500}>#{params.value.slice(0, 8)}</Typography>
+      ),
+    },
+    { field: "customer_name", headerName: "Customer", flex: 1, minWidth: 180 },
+    { field: "district", headerName: "District", width: 120 },
+    {
+      field: "total",
+      headerName: "Total",
+      width: 120,
+      renderCell: (params) => (
+        <Typography fontWeight={600}>Rs. {params.value}</Typography>
+      ),
+    },
+    { field: "payment_method", headerName: "Payment", width: 140 },
+    {
+      field: "status",
+      headerName: "Status",
+      width: 140,
+      renderCell: (params) => (
+        <Chip
+          size="small"
+          label={params.value}
+          color={STATUS_COLORS[params.value as OrderStatus]}
+        />
+      ),
+    },
+    {
+      field: "created_at",
+      headerName: "Date",
+      width: 160,
+      renderCell: (params) => new Date(params.value).toLocaleString(),
+    },
+    {
+      field: "actions",
+      headerName: "Actions",
+      width: 90,
+      sortable: false,
+      renderCell: (params) => (
+        <IconButton
+          size="small"
+          onClick={() => setSelectedOrderId(params.row.id)}
+        >
+          <VisibilityIcon fontSize="small" />
+        </IconButton>
+      ),
+    },
+  ];
 
   return (
-    <Box px={3} py={4} width="100%">
-      <Typography variant="h5" mb={3}>
-        Orders
-      </Typography>
+    <Box width="100%" minHeight="100vh" bgcolor="#f8fafc">
+      {/* HEADER */}
+      <Box
+        px={{ xs: 2, sm: 4 }}
+        py={2}
+        display="flex"
+        justifyContent="space-between"
+        alignItems="center"
+        bgcolor="#fff"
+        boxShadow="0 1px 8px rgba(0,0,0,0.05)"
+      >
+        <Box>
+          <Typography fontSize={20} fontWeight={600}>
+            Orders
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            Manage customer orders
+          </Typography>
+        </Box>
 
-      <Box display="flex" flexDirection="column" gap={2}>
-        {orders.map((order) => {
-          const currentStatus: OrderStatus =
-            order.status_log.length > 0
-              ? order.status_log[order.status_log.length - 1].status
-              : "pending";
-
-          return (
-            <Card key={order.id} variant="outlined">
-              <CardContent>
-                {/* Header */}
-                <Box display="flex" justifyContent="space-between" mb={1}>
-                  <Typography fontWeight={600}>
-                    Order #{order.id.slice(0, 8)}
-                  </Typography>
-
-                  <Chip
-                    label={currentStatus}
-                    color={statusColors[currentStatus]}
-                    size="small"
-                  />
-                </Box>
-
-                {/* Customer */}
-                <Typography variant="body2" color="text.secondary">
-                  {order.customer_name} · {order.phone1}
-                </Typography>
-
-                <Divider sx={{ my: 2 }} />
-
-                {/* Items */}
-                <Box display="flex" flexDirection="column" gap={1}>
-                  {order.items.map((item) => {
-                    const product = productMap[item.product_id];
-
-                    return (
-                      <Box
-                        key={item.product_id}
-                        display="flex"
-                        alignItems="center"
-                        gap={2}
-                      >
-                        {product?.images?.[0] && (
-                          <img
-                            src={product.images[0]}
-                            width={48}
-                            height={48}
-                            style={{ objectFit: "cover", borderRadius: 6 }}
-                          />
-                        )}
-                        <Box flex={1}>
-                          <Typography fontSize={14}>
-                            {product?.name || "Unknown product"}
-                          </Typography>
-                          <Typography variant="caption" color="text.secondary">
-                            Qty: {item.qty}
-                          </Typography>
-                        </Box>
-                        <Typography fontSize={14}>
-                          Rs. {item.price * item.qty}
-                        </Typography>
-                      </Box>
-                    );
-                  })}
-                </Box>
-
-                <Divider sx={{ my: 2 }} />
-
-                {/* Footer */}
-                <Box
-                  display="flex"
-                  justifyContent="space-between"
-                  alignItems="center"
-                >
-                  <Typography fontWeight={600}>
-                    Total: Rs. {order.total}
-                  </Typography>
-
-                  <Select
-                    size="small"
-                    value={currentStatus}
-                    onChange={(e) =>
-                      updateStatus(order.id, e.target.value as OrderStatus)
-                    }
-                  >
-                    <MenuItem value="pending">Pending</MenuItem>
-                    <MenuItem value="processing">Processing</MenuItem>
-                    <MenuItem value="shipped">Shipped</MenuItem>
-                    <MenuItem value="delivered">Delivered</MenuItem>
-                    <MenuItem value="cancelled">Cancelled</MenuItem>
-                  </Select>
-                </Box>
-              </CardContent>
-            </Card>
-          );
-        })}
+        <Box display="flex" alignItems="center" gap={2}>
+          <Button variant="outlined" onClick={loadOrders}>
+            Refresh
+          </Button>
+          <Button variant="outlined" onClick={() => navigate(-1)}>
+            Back
+          </Button>
+        </Box>
       </Box>
+
+      {/* SEARCH + FILTERS */}
+      <Box px={{ xs: 2, sm: 4 }} py={4}>
+        <Box
+          mb={3}
+          display="flex"
+          justifyContent="space-between"
+          alignItems="center"
+          gap={2}
+          flexWrap="wrap"
+        >
+          <Box maxWidth={360} flex={1}>
+            <TextField
+              fullWidth
+              size="small"
+              placeholder="Search orders…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+          </Box>
+          <FormGroup row>
+            {ALL_STATUSES.map((status) => (
+              <FormControlLabel
+                key={status}
+                label={status}
+                control={
+                  <Checkbox
+                    size="small"
+                    checked={selectedStatuses.includes(status)}
+                    onChange={(e) =>
+                      setSelectedStatuses((prev) =>
+                        e.target.checked
+                          ? [...prev, status]
+                          : prev.filter((s) => s !== status)
+                      )
+                    }
+                  />
+                }
+              />
+            ))}
+          </FormGroup>
+        </Box>
+
+        <Box height={600}>
+          <DataGrid
+            rows={filteredOrders}
+            columns={columns}
+            getRowId={(row) => row.id}
+            loading={loading}
+            pageSizeOptions={[10, 25, 50]}
+            initialState={{
+              pagination: { paginationModel: { pageSize: 10, page: 0 } },
+            }}
+            disableRowSelectionOnClick
+            sx={{
+              backgroundColor: "#fff",
+              borderRadius: 2,
+              "& .MuiDataGrid-columnHeaders": {
+                backgroundColor: "#f1f5f9",
+                fontWeight: 600,
+              },
+              "& .MuiDataGrid-cell": { display: "flex", alignItems: "center" },
+            }}
+          />
+        </Box>
+      </Box>
+
+      {/* FULLSCREEN ORDER DETAIL DIALOG */}
+      {selectedOrderId && (
+        <OrderDetailPage
+          open={Boolean(selectedOrderId)}
+          onClose={() => setSelectedOrderId(null)}
+          orderId={selectedOrderId}
+        />
+      )}
     </Box>
   );
 }

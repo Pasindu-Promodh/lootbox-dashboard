@@ -27,6 +27,7 @@ export interface Order {
   discounted_subtotal: number;
   shipping: number;
   total: number;
+  status: string;
   status_log: OrderStatusLog[];
   items: OrderItem[];
 

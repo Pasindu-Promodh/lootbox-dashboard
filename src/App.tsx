@@ -21,52 +21,52 @@ export default function App() {
   return (
     <AuthProvider>
       <CategoriesProvider>
-      <HashRouter>
-        <Routes>
-          <Route path="/login" element={<Login />} />
-          <Route
-            path="/"
-            element={
-              <ProtectedRoute>
-                <Dashboard />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/products"
-            element={
-              <ProtectedRoute>
-                <ProductsPage />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/products/new"
-            element={
-              <ProtectedRoute>
-                <ProductFormPage />
-              </ProtectedRoute>
-            }
-          />
+        <HashRouter>
+          <Routes>
+            <Route path="/login" element={<Login />} />
+            <Route
+              path="/"
+              element={
+                <ProtectedRoute>
+                  <Dashboard />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/products"
+              element={
+                <ProtectedRoute>
+                  <ProductsPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/products/new"
+              element={
+                <ProtectedRoute>
+                  <ProductFormPage />
+                </ProtectedRoute>
+              }
+            />
 
-          <Route
-            path="/products/:id"
-            element={
-              <ProtectedRoute>
-                <ProductFormPage />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/orders"
-            element={
-              <ProtectedRoute>
-                <OrdersPage/>
-              </ProtectedRoute>
-            }
-          />
-        </Routes>
-      </HashRouter>
+            <Route
+              path="/products/:id"
+              element={
+                <ProtectedRoute>
+                  <ProductFormPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/orders"
+              element={
+                <ProtectedRoute>
+                  <OrdersPage />
+                </ProtectedRoute>
+              }
+            />
+          </Routes>
+        </HashRouter>
       </CategoriesProvider>
     </AuthProvider>
   );
