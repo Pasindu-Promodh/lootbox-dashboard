@@ -1,10 +1,19 @@
 import { supabase } from "../lib/supabase";
 
+/* =========================
+   Image & Product Types
+========================= */
+
+export type ProductImage = {
+  main: string; // product page image
+  thumb: string; // grid / listing image
+};
+
 export type Product = {
   id: string;
   name: string;
   description: string;
-  images: string[];
+  images: ProductImage[];
   category: string;
   original_price: number;
   price: number;
@@ -16,14 +25,37 @@ export type Product = {
   added_date: string;
 };
 
-/**
- * Fetch products with optional limit, offset, featured filter, and ordering
- */
+/* =========================
+   Helpers
+========================= */
+
+function mapProduct(p: any): Product {
+  return {
+    id: p.id,
+    name: p.name,
+    description: p.description,
+    images: Array.isArray(p.images) ? p.images : [],
+    category: p.category,
+    original_price: Number(p.original_price),
+    price: Number(p.price),
+    discount: Number(p.discount),
+    featured: Boolean(p.featured),
+    in_stock: Boolean(p.in_stock),
+    on_sale: Boolean(p.on_sale),
+    sold_count: Number(p.sold_count),
+    added_date: p.added_date,
+  };
+}
+
+/* =========================
+   Fetch Products
+========================= */
+
 export async function getProducts({
   limit = 12,
   offset = 0,
   featured,
-  orderBy,
+  orderBy = { column: "added_date", ascending: false },
 }: {
   limit?: number;
   offset?: number;
@@ -33,10 +65,12 @@ export async function getProducts({
   let query = supabase
     .from("products")
     .select("*")
+    .order(orderBy.column, { ascending: orderBy.ascending ?? false })
     .range(offset, offset + limit - 1);
 
-  if (featured !== undefined) query = query.eq("featured", featured);
-  if (orderBy) query = query.order(orderBy.column, { ascending: orderBy.ascending ?? false });
+  if (featured !== undefined) {
+    query = query.eq("featured", featured);
+  }
 
   const { data, error } = await query;
 
@@ -45,27 +79,17 @@ export async function getProducts({
     return [];
   }
 
-  return (data || []).map((p: any) => ({
-    id: p.id,
-    name: p.name,
-    description: p.description,
-    images: p.images || [],
-    category: p.category,
-    original_price: Number(p.original_price),
-    price: Number(p.price),
-    discount: Number(p.discount),
-    featured: p.featured,
-    in_stock: p.in_stock,
-    on_sale: p.on_sale,
-    sold_count: p.sold_count,
-    added_date: p.added_date,
-  }));
+  return (data ?? []).map(mapProduct);
 }
 
-/**
- * Fetch products by category
- */
-export async function getProductsByCategory(category: string, limit?: number): Promise<Product[]> {
+/* =========================
+   Fetch by Category
+========================= */
+
+export async function getProductsByCategory(
+  category: string,
+  limit?: number
+): Promise<Product[]> {
   let query = supabase
     .from("products")
     .select("*")
@@ -77,31 +101,20 @@ export async function getProductsByCategory(category: string, limit?: number): P
   const { data, error } = await query;
 
   if (error) {
-    console.error(`Error loading products in category "${category}":`, error);
+    console.error(`Error loading products for category "${category}":`, error);
     return [];
   }
 
-  return (data || []).map((p: any) => ({
-    id: p.id,
-    name: p.name,
-    description: p.description,
-    images: p.images || [],
-    category: p.category,
-    original_price: Number(p.original_price),
-    price: Number(p.price),
-    discount: Number(p.discount),
-    featured: p.featured,
-    in_stock: p.in_stock,
-    on_sale: p.on_sale,
-    sold_count: p.sold_count,
-    added_date: p.added_date,
-  }));
+  return (data ?? []).map(mapProduct);
 }
 
-/**
- * Fetch a single product by ID
- */
-export async function getProductById(id: string | undefined): Promise<Product | null> {
+/* =========================
+   Fetch Single Product
+========================= */
+
+export async function getProductById(
+  id: string | undefined
+): Promise<Product | null> {
   if (!id) return null;
 
   const { data, error } = await supabase
@@ -115,27 +128,17 @@ export async function getProductById(id: string | undefined): Promise<Product | 
     return null;
   }
 
-  return {
-    id: data.id,
-    name: data.name,
-    description: data.description,
-    images: data.images || [],
-    category: data.category,
-    original_price: Number(data.original_price),
-    price: Number(data.price),
-    discount: Number(data.discount),
-    featured: data.featured,
-    in_stock: data.in_stock,
-    on_sale: data.on_sale,
-    sold_count: data.sold_count,
-    added_date: data.added_date,
-  };
+  return mapProduct(data);
 }
 
-/**
- * Search products by keyword (name, description, category)
- */
-export async function searchProducts(keyword: string, limit = 12): Promise<Product[]> {
+/* =========================
+   Search Products
+========================= */
+
+export async function searchProducts(
+  keyword: string,
+  limit = 12
+): Promise<Product[]> {
   if (!keyword.trim()) return [];
 
   const { data, error } = await supabase
@@ -152,19 +155,5 @@ export async function searchProducts(keyword: string, limit = 12): Promise<Produ
     return [];
   }
 
-  return (data || []).map((p: any) => ({
-    id: p.id,
-    name: p.name,
-    description: p.description,
-    images: p.images || [],
-    category: p.category,
-    original_price: Number(p.original_price),
-    price: Number(p.price),
-    discount: Number(p.discount),
-    featured: p.featured,
-    in_stock: p.in_stock,
-    on_sale: p.on_sale,
-    sold_count: p.sold_count,
-    added_date: p.added_date,
-  }));
+  return (data ?? []).map(mapProduct);
 }

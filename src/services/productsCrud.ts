@@ -1,10 +1,13 @@
 import { supabase } from "../lib/supabase";
+import type { ProductImage } from "./productImages";
 import type { Product } from "./products";
 
 /**
  * Add a new product
  */
-export async function addProduct(product: Omit<Product, "id" | "added_date" | "sold_count">) {
+export async function addProduct(
+  product: Omit<Product, "id" | "added_date" | "sold_count">
+) {
   const { data, error } = await supabase
     .from("products")
     .insert([
@@ -13,14 +16,16 @@ export async function addProduct(product: Omit<Product, "id" | "added_date" | "s
         added_date: new Date().toISOString(),
         sold_count: 0,
       },
-    ]);
+    ])
+    .select("id")
+    .single();
 
   if (error) {
     console.error("Error adding product:", error);
     return null;
   }
 
-//   if (!data || data.length === 0) return null;
+  if (!data) return null;
 
   return data;
 }
@@ -35,14 +40,15 @@ export async function updateProduct(
   const { data, error } = await supabase
     .from("products")
     .update(updates)
-    .eq("id", id);
+    .eq("id", id)
+    .select("id")
+    .single();
 
   if (error) {
     console.error("Error updating product:", error);
     return null;
   }
-
-//   if (!data || data.length === 0) return null;
+  if (!data) return null;
 
   return data;
 }
@@ -50,14 +56,98 @@ export async function updateProduct(
 /**
  * Delete a product
  */
+// export async function deleteProduct(id: string) {
+//   const { error } = await supabase.from("products").delete().eq("id", id);
+
+//   if (error) {
+//     console.error("Error deleting product:", error);
+//     return false;
+//   }
+
+//   return true;
+// }
+
+// export async function deleteProduct(id: string) {
+//   const { data: product } = await supabase
+//     .from("products")
+//     .select("images")
+//     .eq("id", id)
+//     .single();
+
+//   if (product?.images) {
+//     for (const img of product.images) {
+//       await deleteProductImage(img);
+//     }
+//   }
+
+//   const { error } = await supabase.from("products").delete().eq("id", id);
+
+//   if (error) {
+//     console.error(error);
+//     return false;
+//   }
+//   console.log("Product deleted successfully");
+//   return true;
+// }
+
 export async function deleteProduct(id: string) {
-  const { error } = await supabase
+  // 1️⃣ Fetch product images
+  const { data: product, error: fetchError } = await supabase
+    .from("products")
+    .select("images")
+    .eq("id", id)
+    .single();
+
+  if (fetchError || !product) {
+    console.error("Failed to fetch product:", fetchError);
+    return false;
+  }
+
+  const images: ProductImage[] = product.images ?? [];
+
+  // 2️⃣ Delete images from bucket
+  if (images.length > 0) {
+    try {
+      const bucketPaths: string[] = [];
+
+      images.forEach(({ main, thumb }) => {
+        [main, thumb].forEach((url) => {
+          try {
+            const u = new URL(url);
+            const index = u.pathname.indexOf("/product-images/");
+            if (index >= 0) {
+              bucketPaths.push(u.pathname.slice(index + "/product-images/".length));
+            }
+          } catch (err) {
+            console.warn("Invalid URL, skipping:", url);
+          }
+        });
+      });
+
+      if (bucketPaths.length > 0) {
+        const { error: storageError } = await supabase.storage
+          .from("product-images")
+          .remove(bucketPaths);
+
+        if (storageError) {
+          console.error("Failed to delete images from bucket:", storageError);
+          return false;
+        }
+      }
+    } catch (err) {
+      console.error("Error deleting images:", err);
+      return false;
+    }
+  }
+
+  // 3️⃣ Delete product row
+  const { error: deleteError } = await supabase
     .from("products")
     .delete()
     .eq("id", id);
 
-  if (error) {
-    console.error("Error deleting product:", error);
+  if (deleteError) {
+    console.error("Failed to delete product:", deleteError);
     return false;
   }
 

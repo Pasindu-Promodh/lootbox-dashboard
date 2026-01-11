@@ -150,7 +150,7 @@ export default function OrdersPage() {
           <Button variant="outlined" onClick={loadOrders}>
             Refresh
           </Button>
-          <Button variant="outlined" onClick={() => navigate(-1)}>
+          <Button variant="outlined" onClick={() => navigate('/')}>
             Back
           </Button>
         </Box>

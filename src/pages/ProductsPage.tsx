@@ -6,6 +6,12 @@ import {
   IconButton,
   Tooltip,
   Snackbar,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogContentText,
+  DialogTitle,
+  CircularProgress,
 } from "@mui/material";
 import EditIcon from "@mui/icons-material/Edit";
 import DeleteIcon from "@mui/icons-material/Delete";
@@ -17,6 +23,7 @@ import { DataGrid, type GridColDef } from "@mui/x-data-grid";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { getProducts, type Product } from "../services/products";
+import { deleteProduct } from "../services/productsCrud";
 
 export default function ProductsPage() {
   const navigate = useNavigate();
@@ -24,6 +31,9 @@ export default function ProductsPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [copied, setCopied] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [productToDelete, setProductToDelete] = useState<Product | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     loadProducts();
@@ -43,29 +53,66 @@ export default function ProductsPage() {
       p.id.toLowerCase().includes(search.toLowerCase())
   );
 
+  // Open delete dialog
+  const handleDeleteClick = (product: Product) => {
+    setProductToDelete(product);
+    setDeleteDialogOpen(true);
+  };
+
+  // Confirm delete
+  const confirmDelete = async () => {
+    if (!productToDelete) return;
+    setDeleting(true);
+    const success = await deleteProduct(productToDelete.id);
+    setDeleting(false);
+
+    if (success) {
+      loadProducts();
+    } else {
+      alert("Failed to delete product");
+    }
+
+    setDeleteDialogOpen(false);
+    setProductToDelete(null);
+  };
+
+  // Cancel delete
+  const cancelDelete = () => {
+    setDeleteDialogOpen(false);
+    setProductToDelete(null);
+  };
+
   const columns: GridColDef[] = [
     {
       field: "images",
       headerName: "",
       width: 70,
       sortable: false,
-      renderCell: (params) => (
-        <Box
-          width={40}
-          height={40}
-          borderRadius={1}
-          overflow="hidden"
-          bgcolor="#e2e8f0"
-        >
-          {params.value?.[0] && (
-            <img
-              src={params.value[0]}
-              alt=""
-              style={{ width: "100%", height: "100%", objectFit: "cover" }}
-            />
-          )}
-        </Box>
-      ),
+      renderCell: (params) => {
+        const img = params.value?.[0]?.thumb || params.value?.[0]?.main;
+
+        return (
+          <Box
+            width={40}
+            height={40}
+            borderRadius={1}
+            overflow="hidden"
+            bgcolor="#e2e8f0"
+          >
+            {img && (
+              <img
+                src={img}
+                alt=""
+                style={{
+                  width: "100%",
+                  height: "100%",
+                  objectFit: "cover",
+                }}
+              />
+            )}
+          </Box>
+        );
+      },
     },
     {
       field: "id",
@@ -97,17 +144,17 @@ export default function ProductsPage() {
       flex: 1,
       minWidth: 160,
     },
-    {
-      field: "description",
-      headerName: "Description",
-      flex: 2,
-      minWidth: 220,
-      renderCell: (params) => (
-        <Typography noWrap title={params.value} fontSize={"0.7rem"}>
-          {params.value}
-        </Typography>
-      ),
-    },
+    // {
+    //   field: "description",
+    //   headerName: "Description",
+    //   flex: 2,
+    //   minWidth: 220,
+    //   renderCell: (params) => (
+    //     <Typography noWrap title={params.value} fontSize={"0.7rem"}>
+    //       {params.value}
+    //     </Typography>
+    //   ),
+    // },
     {
       field: "category",
       headerName: "Category",
@@ -119,11 +166,12 @@ export default function ProductsPage() {
       width: 120,
       renderCell: (params) => (
         <Typography
-        //   sx={{
-        //     textDecoration: params.row.discount > 0 ? "line-through" : "none",
-        //   }}
+          sx={{ textAlign: "right", flex: 1 }}
+          //   sx={{
+          //     textDecoration: params.row.discount > 0 ? "line-through" : "none",
+          //   }}
         >
-          ${params.value}
+          {params.value}
         </Typography>
       ),
     },
@@ -132,14 +180,9 @@ export default function ProductsPage() {
       headerName: "Price",
       width: 120,
       renderCell: (params) => (
-        <Box flex={1}>
-          <Typography fontWeight={600}>${params.value}</Typography>
-          {/* {params.row.discount > 0 && (
-            <Typography variant="caption" color="error" sx={{m:0, p:0}}>
-              {params.row.discount}% off
-            </Typography>
-          )} */}
-        </Box>
+        <Typography sx={{ flex: 1, textAlign: "right" }} fontWeight={600}>
+          {params.value}
+        </Typography>
       ),
     },
     {
@@ -184,14 +227,20 @@ export default function ProductsPage() {
       width: 100,
       sortable: false,
       renderCell: (params) => (
-        <Box>
+        <Box sx={{ flex: 1, justifyContent: "space-between" }}>
           <IconButton
-            size="small"
+            size="large"
+            sx={{ flex: 1 }}
             onClick={() => navigate(`/products/${params.row.id}`)}
           >
             <EditIcon fontSize="small" />
           </IconButton>
-          <IconButton size="small" color="error">
+          <IconButton
+            size="medium"
+            sx={{ flex: 1 }}
+            color="error"
+            onClick={() => handleDeleteClick(params.row)}
+          >
             <DeleteIcon fontSize="small" />
           </IconButton>
         </Box>
@@ -224,7 +273,10 @@ export default function ProductsPage() {
           <Button variant="outlined" onClick={() => navigate("/products/new")}>
             Add Product
           </Button>
-          <Button variant="outlined" onClick={() => navigate(-1)}>
+          <Button variant="outlined" onClick={loadProducts}>
+            Refresh
+          </Button>
+          <Button variant="outlined" onClick={() => navigate("/")}>
             Back
           </Button>
         </Box>
@@ -272,6 +324,31 @@ export default function ProductsPage() {
           />
         </Box>
       </Box>
+
+      {/* Delete confirmation dialog */}
+      <Dialog open={deleteDialogOpen} onClose={cancelDelete}>
+        <DialogTitle>Delete Product</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            Are you sure you want to delete{" "}
+            <strong>{productToDelete?.name}</strong>? This action cannot be
+            undone.
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={cancelDelete} disabled={deleting}>
+            Cancel
+          </Button>
+          <Button
+            color="error"
+            onClick={confirmDelete}
+            disabled={deleting}
+            startIcon={deleting && <CircularProgress size={16} />}
+          >
+            {deleting ? "Deleting..." : "Delete"}
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       {/* Copy feedback */}
       <Snackbar
