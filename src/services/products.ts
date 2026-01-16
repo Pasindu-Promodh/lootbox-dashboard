@@ -15,9 +15,10 @@ export type Product = {
   description: string;
   images: ProductImage[];
   category: string;
+  sub_category: string;
   original_price: number;
+  pre_discount_price: number;
   price: number;
-  discount: number;
   featured: boolean;
   in_stock: boolean;
   on_sale: boolean;
@@ -29,23 +30,24 @@ export type Product = {
    Helpers
 ========================= */
 
-function mapProduct(p: any): Product {
-  return {
-    id: p.id,
-    name: p.name,
-    description: p.description,
-    images: Array.isArray(p.images) ? p.images : [],
-    category: p.category,
-    original_price: Number(p.original_price),
-    price: Number(p.price),
-    discount: Number(p.discount),
-    featured: Boolean(p.featured),
-    in_stock: Boolean(p.in_stock),
-    on_sale: Boolean(p.on_sale),
-    sold_count: Number(p.sold_count),
-    added_date: p.added_date,
-  };
-}
+// function mapProduct(p: any): Product {
+//   return {
+//     id: p.id,
+//     name: p.name,
+//     description: p.description,
+//     images: Array.isArray(p.images) ? p.images : [],
+//     category: p.category,
+//     sub_category: p.sub_category,
+//     original_price: Number(p.original_price),
+//     price: Number(p.price),
+//     discount: Number(p.discount),
+//     featured: Boolean(p.featured),
+//     in_stock: Boolean(p.in_stock),
+//     on_sale: Boolean(p.on_sale),
+//     sold_count: Number(p.sold_count),
+//     added_date: p.added_date,
+//   };
+// }
 
 /* =========================
    Fetch Products
@@ -79,7 +81,7 @@ export async function getProducts({
     return [];
   }
 
-  return (data ?? []).map(mapProduct);
+  return (data ?? []);
 }
 
 /* =========================
@@ -105,7 +107,7 @@ export async function getProductsByCategory(
     return [];
   }
 
-  return (data ?? []).map(mapProduct);
+  return (data ?? []);
 }
 
 /* =========================
@@ -128,7 +130,7 @@ export async function getProductById(
     return null;
   }
 
-  return mapProduct(data);
+  return data;
 }
 
 /* =========================
@@ -155,5 +157,5 @@ export async function searchProducts(
     return [];
   }
 
-  return (data ?? []).map(mapProduct);
+  return (data ?? []);
 }

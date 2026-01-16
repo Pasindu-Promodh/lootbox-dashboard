@@ -1,12 +1,13 @@
 import { supabase } from "../lib/supabase";
 import { compressImageToWebP } from "../utils/imageCompression";
+import type { ProductImage } from "./products";
 
 type UploadProgress = (percent: number) => void;
 
-export type ProductImage = {
-  main: string;
-  thumb: string;
-};
+// export type ProductImage = {
+//   main: string;
+//   thumb: string;
+// };
 
 /**
  * Uploads main + thumbnail versions
@@ -20,7 +21,7 @@ export async function uploadProductImageSet(
 
   try {
     // 1️⃣ Compress images
-    const mainImage = await compressImageToWebP(file, 1200, 0.85);
+    const mainImage = await compressImageToWebP(file, 720, 0.85);
     const thumbImage = await compressImageToWebP(file, 300, 0.7);
 
     // 2️⃣ Upload main image

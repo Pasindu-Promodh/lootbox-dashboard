@@ -1,8 +1,10 @@
 export interface OrderItem {
   product_id: string;
   qty: number;
+  original_price: number;
+  pre_discount_price: number;
   price: number;
-  discount: number;
+  profit: number;
 }
 
 export type OrderStatus =
@@ -22,14 +24,16 @@ export interface Order {
   id: string;
   created_at: string;
 
+  pre_discount_subtotal: number;
   subtotal: number;
   discount: number;
-  discounted_subtotal: number;
   shipping: number;
   total: number;
+  profit: number;
   status: string;
   status_log: OrderStatusLog[];
   items: OrderItem[];
+  payment_status: "pending" | "submitted" | "received";
 
   customer_name: string;
   address: string;

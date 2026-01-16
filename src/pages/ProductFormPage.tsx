@@ -494,18 +494,31 @@ const initialForm: FormValues = {
   description: "",
   images: [],
   category: "",
+  sub_category: "",
   original_price: 0,
+  pre_discount_price: 0,
   price: 0,
-  discount: 0,
   featured: false,
   in_stock: true,
   on_sale: false,
 };
 
+const calcPrePriceFromMargin = (original: number, margin: number) =>
+  Math.round(original + (original * margin) / 100);
+
+const calcFinalPrice = (pre: number, discount: number) =>
+  Math.round(pre - (pre * discount) / 100);
+
+const calcMarginFromPrices = (original: number, pre: number) =>
+  original ? Math.round(((pre - original) / original) * 100) : 0;
+
+const calcDiscountFromPrices = (pre: number, price: number) =>
+  pre ? Math.round(((pre - price) / pre) * 100) : 0;
+
 export default function ProductFormPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { categories, addNewCategory } = useCategories();
+  const { categories, ensureCategoryAndSub } = useCategories();
 
   const [form, setForm] = useState<FormValues>(initialForm);
   const initialFormRef = useRef<FormValues>(initialForm);
@@ -516,9 +529,9 @@ export default function ProductFormPage() {
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
 
   const [margin, setMargin] = useState(0);
+  const [discount, setDiscount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
-  const [categoryLoading, setCategoryLoading] = useState(false);
 
   /* ---------------------------------- Load Product -------------------------------- */
   useEffect(() => {
@@ -536,9 +549,10 @@ export default function ProductFormPage() {
         name: product.name,
         description: product.description,
         category: product.category,
+        sub_category: product.sub_category,
         original_price: product.original_price,
+        pre_discount_price: product.pre_discount_price,
         price: product.price,
-        discount: product.discount,
         featured: product.featured,
         in_stock: product.in_stock,
         on_sale: product.on_sale,
@@ -548,6 +562,10 @@ export default function ProductFormPage() {
       setForm(formData);
       initialFormRef.current = formData;
 
+      setDiscount(
+        calcDiscountFromPrices(product.pre_discount_price, product.price)
+      );
+
       // ✅ images are now objects, not URLs
       const existing: ExistingImage[] = product.images;
       setExistingImages(existing);
@@ -555,14 +573,21 @@ export default function ProductFormPage() {
 
       setSelectedImage(existing[0]?.main || null);
 
+      // setMargin(
+      //   product.original_price
+      //     ? Math.round(
+      //         ((product.price - product.original_price) /
+      //           product.original_price) *
+      //           100
+      //       )
+      //     : 0
+      // );
+
       setMargin(
-        product.original_price
-          ? Math.round(
-              ((product.price - product.original_price) /
-                product.original_price) *
-                100
-            )
-          : 0
+        calcMarginFromPrices(
+          product.original_price,
+          product.pre_discount_price
+        )
       );
 
       setLoading(false);
@@ -584,6 +609,12 @@ export default function ProductFormPage() {
     })),
   ];
 
+  const categoryNames = categories.map((c) => c.name);
+
+  const selectedCategory = categories.find((c) => c.name === form.category);
+
+  const subOptions = selectedCategory?.subs ?? [];
+
   const handleChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
   ) => {
@@ -594,16 +625,16 @@ export default function ProductFormPage() {
       let updated = {
         ...prev,
         [name]:
-          name === "price" || name === "discount" || name === "original_price"
+          name === "price" || name === "original_price"
             ? intValue
             : value,
       };
 
-      if (!id && name === "original_price") {
-        updated.price =
-          updated.original_price +
-          Math.round((updated.original_price * margin) / 100);
-      }
+      // if (!id && name === "original_price") {
+      updated.price =
+        updated.original_price +
+        Math.round((updated.original_price * margin) / 100);
+      // }
 
       if (!id && name === "price" && updated.original_price) {
         setMargin(
@@ -619,25 +650,89 @@ export default function ProductFormPage() {
     });
   };
 
+  const handleDiscountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newDiscount = Math.round(Number(e.target.value));
+
+    setDiscount(newDiscount);
+
+    // setForm((prev) => ({
+    //   ...prev,
+    //   discount,
+    //   price: prev.on_sale
+    //     ? calcFinalPrice(prev.pre_discount_price, discount)
+    //     : prev.pre_discount_price,
+    // }));
+
+    setForm((prev) => {
+      const final = calcFinalPrice(prev.pre_discount_price, newDiscount);
+      return {
+        ...prev,
+        price: prev.on_sale ? final : prev.pre_discount_price,
+      };
+    });
+  };
+
+  // const handleMarginChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  //   const newMargin = Math.round(Number(e.target.value));
+  //   setMargin(newMargin);
+
+  //   // if (!id) {
+  //     setForm((prev) => ({
+  //       ...prev,
+  //       price:
+  //         prev.original_price +
+  //         Math.round((prev.original_price * newMargin) / 100),
+  //     }));
+  //   // }
+  // };
+
   const handleMarginChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newMargin = Math.round(Number(e.target.value));
     setMargin(newMargin);
 
-    if (!id) {
-      setForm((prev) => ({
+    setForm((prev) => {
+      const pre = calcPrePriceFromMargin(prev.original_price, newMargin);
+      const final = prev.on_sale ? calcFinalPrice(pre, discount) : pre;
+
+      return {
         ...prev,
-        price:
-          prev.original_price +
-          Math.round((prev.original_price * newMargin) / 100),
-      }));
-    }
+        pre_discount_price: pre,
+        price: final,
+      };
+    });
   };
+
+  // const handleToggle = (key: keyof FormValues) => {
+  //   setForm((prev) => {
+  //     let updated = { ...prev, [key]: !prev[key] };
+  //     if (key === "on_sale" && !updated.on_sale) updated.discount = 0; // reset discount if off
+  //     return updated;
+  //   });
+  // };
 
   const handleToggle = (key: keyof FormValues) => {
     setForm((prev) => {
-      let updated = { ...prev, [key]: !prev[key] };
-      if (key === "on_sale" && !updated.on_sale) updated.discount = 0; // reset discount if off
-      return updated;
+      if (key !== "on_sale") {
+        return { ...prev, [key]: !prev[key] };
+      }
+
+      const turningOff = prev.on_sale;
+
+      if (turningOff) {
+        // on_sale → OFF
+        return {
+          ...prev,
+          on_sale: false,
+          price: prev.pre_discount_price,
+        };
+      }
+
+      // on_sale → ON
+      return {
+        ...prev,
+        on_sale: true,
+        price: calcFinalPrice(prev.pre_discount_price, discount),
+      };
     });
   };
 
@@ -658,21 +753,22 @@ export default function ProductFormPage() {
     return (
       form.name.trim() !== "" &&
       form.category.trim() !== "" &&
+      form.sub_category.trim() !== "" &&
       form.price > 0 &&
       localImages.length > 0
     );
   };
 
   /* ---------------------------------- Categories -------------------------------- */
-  const handleCategoryChange = async (_: any, value: string | null) => {
-    if (!value) return;
-    if (!categories.includes(value)) {
-      setCategoryLoading(true);
-      await addNewCategory(value);
-      setCategoryLoading(false);
-    }
-    setForm((p) => ({ ...p, category: value }));
-  };
+  // const handleCategoryChange = async (_: any, value: string | null) => {
+  //   if (!value) return;
+  //   if (!categories.includes(value)) {
+  //     setCategoryLoading(true);
+  //     await addNewCategory(value);
+  //     setCategoryLoading(false);
+  //   }
+  //   setForm((p) => ({ ...p, category: value }));
+  // };
 
   /* ---------------------------------- Image Upload -------------------------------- */
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -741,9 +837,18 @@ export default function ProductFormPage() {
 
   /* ---------------------------------- Submit -------------------------------- */
   const handleSubmit = async () => {
+    //console.log({...form});
     setSubmitting(true);
 
     try {
+      const ok = await ensureCategoryAndSub(form.category, form.sub_category);
+
+      if (!ok) {
+        alert("Failed to sync category / sub category");
+        setSubmitting(false);
+        return;
+      }
+
       const uploaded: ExistingImage[] = [];
 
       for (let i = 0; i < localImages.length; i++) {
@@ -842,23 +947,30 @@ export default function ProductFormPage() {
 
             <Autocomplete
               freeSolo
-              options={categories}
+              options={categoryNames}
               value={form.category}
-              onChange={handleCategoryChange}
+              onChange={(_, value) => {
+                setForm((p) => ({
+                  ...p,
+                  category: value ?? "",
+                  sub_category: "",
+                }));
+              }}
               renderInput={(params) => (
-                <TextField
-                  {...params}
-                  label="Category"
-                  InputProps={{
-                    ...params.InputProps,
-                    endAdornment: (
-                      <>
-                        {categoryLoading && <CircularProgress size={20} />}
-                        {params.InputProps.endAdornment}
-                      </>
-                    ),
-                  }}
-                />
+                <TextField {...params} label="Category" />
+              )}
+            />
+
+            <Autocomplete
+              freeSolo
+              options={subOptions}
+              value={form.sub_category}
+              disabled={!form.category}
+              onChange={(_, value) => {
+                setForm((p) => ({ ...p, sub_category: value ?? "" }));
+              }}
+              renderInput={(params) => (
+                <TextField {...params} label="Sub Category" />
               )}
             />
 
@@ -881,31 +993,45 @@ export default function ProductFormPage() {
             </Box>
 
             <Box display="flex" gap={2} alignItems="center">
-              <TextField
+              {/* <TextField
                 label="Price"
                 name="price"
                 type="number"
                 value={form.price}
                 onChange={handleChange}
                 fullWidth
+              /> */}
+
+              <TextField
+                label="Pre Discount Price"
+                name="pre_discount_price"
+                type="number"
+                value={form.pre_discount_price}
+                fullWidth
+                disabled
               />
+
               <TextField
                 label="Discount (%)"
                 name="discount"
                 type="number"
-                value={form.discount}
-                onChange={handleChange}
+                value={discount}
+                onChange={handleDiscountChange}
                 disabled={!form.on_sale}
                 sx={{ width: 150 }}
               />
             </Box>
 
-            <Typography variant="body2" color="text.secondary">
+            {/* <Typography variant="h6" color="text.primary">
               Price after discount:{" "}
               {
                 // form.price - Math.floor((form.price * form.discount) / 100)
                 form.price - (form.price * form.discount) / 100
               }
+            </Typography> */}
+
+            <Typography variant="h6">
+              Final Price: <strong>{form.price}</strong>
             </Typography>
 
             <Box display="flex" gap={2}>
@@ -948,9 +1074,19 @@ export default function ProductFormPage() {
           </Box>
 
           {/* Right Images */}
-          <Box width={420} display="flex" flexDirection="column" gap={2}>
+          {/* <Box width={420} display="flex" flexDirection="column" gap={2} >
             {selectedImage && (
               <Box height={400}>
+                <img
+                  src={selectedImage}
+                  style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                />
+              </Box>
+            )} */}
+
+          <Box width={500} display="flex" flexDirection="column" gap={2}>
+            {selectedImage && (
+              <Box maxHeight={500} sx={{ aspectRatio: 1 }}>
                 <img
                   src={selectedImage}
                   style={{ width: "100%", height: "100%", objectFit: "cover" }}

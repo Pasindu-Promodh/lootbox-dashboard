@@ -11,6 +11,7 @@ import {
 import Inventory2Icon from "@mui/icons-material/Inventory2";
 import ShoppingCartIcon from "@mui/icons-material/ShoppingCart";
 import PeopleIcon from "@mui/icons-material/People";
+import PaidIcon from "@mui/icons-material/Paid";
 import LogoutIcon from "@mui/icons-material/Logout";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "../lib/supabase";
@@ -21,24 +22,32 @@ const tiles = [
     title: "Products",
     description: "Manage products & categories",
     icon: Inventory2Icon,
-    color: "#4f46e5",
+    color: "#4f46e5", // indigo
     path: "/products",
   },
   {
     title: "Orders",
     description: "View and update orders",
     icon: ShoppingCartIcon,
-    color: "#0ea5e9",
+    color: "#0ea5e9", // sky blue
     path: "/orders",
   },
   {
     title: "Users",
-    description: "User & role management",
+    description: "Manage users, roles & access",
     icon: PeopleIcon,
-    color: "#22c55e",
+    color: "#a855f7", // purple (distinct from finance)
     path: "/users",
   },
+  {
+    title: "Finance",
+    description: "Track revenue, profits & expenses",
+    icon: PaidIcon, // ideally swap later to a finance icon
+    color: "#22c55e", // green = money
+    path: "/finance",
+  },
 ];
+
 
 export default function Dashboard() {
   const navigate = useNavigate();

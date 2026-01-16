@@ -1,6 +1,6 @@
 import { supabase } from "../lib/supabase";
-import type { ProductImage } from "./productImages";
-import type { Product } from "./products";
+import type { Category } from "../types/category";
+import type { Product, ProductImage } from "./products";
 
 /**
  * Add a new product
@@ -13,7 +13,7 @@ export async function addProduct(
     .insert([
       {
         ...product,
-        added_date: new Date().toISOString(),
+        // added_date: new Date().toISOString(),
         sold_count: 0,
       },
     ])
@@ -157,34 +157,26 @@ export async function deleteProduct(id: string) {
 /**
  * Fetch all categories
  */
-export async function getCategories(): Promise<string[]> {
+export async function getCategories(): Promise<Category[]> {
   const { data, error } = await supabase
     .from("categories")
-    .select("name")
-    .order("name", { ascending: true });
+    .select("name, subs, sort_order")
+    .order("sort_order", { ascending: true });
 
-  if (error) {
-    console.error("Error fetching categories:", error);
-    return [];
-  }
-
-  if (!data) return [];
-
-  return data.map((c: any) => c.name);
+  if (error || !data) return [];
+  return data;
 }
+
 
 export async function addCategory(name: string) {
   const { data, error } = await supabase
     .from("categories")
-    .insert({ name })
-    .select();
+    .insert({ name, subs: [], sort_order: 999 })
+    .select()
+    .single();
 
-  if (error) {
-    console.error("Error adding category:", error);
-    return null;
-  }
-
-  return data && data[0] ? data[0].name : null;
+  if (error) return null;
+  return data as Category;
 }
 
 // Optional: search categories by partial match

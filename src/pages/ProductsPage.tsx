@@ -25,6 +25,9 @@ import { useNavigate } from "react-router-dom";
 import { getProducts, type Product } from "../services/products";
 import { deleteProduct } from "../services/productsCrud";
 
+const calcDiscountFromPrices = (pre: number, price: number) =>
+  pre ? Math.round(((pre - price) / pre) * 100) : 0;
+
 export default function ProductsPage() {
   const navigate = useNavigate();
   const [products, setProducts] = useState<Product[]>([]);
@@ -50,6 +53,7 @@ export default function ProductsPage() {
     (p) =>
       p.name.toLowerCase().includes(search.toLowerCase()) ||
       p.category.toLowerCase().includes(search.toLowerCase()) ||
+      p.sub_category.toLowerCase().includes(search.toLowerCase()) ||
       p.id.toLowerCase().includes(search.toLowerCase())
   );
 
@@ -144,33 +148,22 @@ export default function ProductsPage() {
       flex: 1,
       minWidth: 160,
     },
-    // {
-    //   field: "description",
-    //   headerName: "Description",
-    //   flex: 2,
-    //   minWidth: 220,
-    //   renderCell: (params) => (
-    //     <Typography noWrap title={params.value} fontSize={"0.7rem"}>
-    //       {params.value}
-    //     </Typography>
-    //   ),
-    // },
     {
       field: "category",
       headerName: "Category",
-      width: 140,
+      width: 150,
+    },
+    {
+      field: "sub_category",
+      headerName: "Sub Category",
+      width: 150,
     },
     {
       field: "original_price",
       headerName: "Original",
-      width: 120,
+      width: 80,
       renderCell: (params) => (
-        <Typography
-          sx={{ textAlign: "right", flex: 1 }}
-          //   sx={{
-          //     textDecoration: params.row.discount > 0 ? "line-through" : "none",
-          //   }}
-        >
+        <Typography sx={{ textAlign: "right", flex: 1 }}>
           {params.value}
         </Typography>
       ),
@@ -178,23 +171,58 @@ export default function ProductsPage() {
     {
       field: "price",
       headerName: "Price",
-      width: 120,
+      width: 140,
       renderCell: (params) => (
-        <Typography sx={{ flex: 1, textAlign: "right" }} fontWeight={600}>
-          {params.value}
-        </Typography>
+        <Box
+          sx={{
+            flex: 1,
+            justifyContent: "space-between",
+            display: "flex",
+          }}
+        >
+          {params.row.on_sale && (
+            <Tooltip title="Pre-discount price">
+              <Typography
+                sx={{
+                  flex: 1,
+                  textAlign: "right",
+                  textDecoration: "line-through",
+                }}
+              >
+                {params.row.pre_discount_price}
+              </Typography>
+            </Tooltip>
+          )}
+          <Typography sx={{ flex: 1, textAlign: "right" }} fontWeight={600}>
+            {params.value}
+          </Typography>
+        </Box>
       ),
     },
     {
       field: "discount",
       headerName: "Discount",
       width: 80,
-      renderCell: (params) => (params.value > 0 ? `${params.value}%` : "—"),
+      renderCell: (params) => (
+        <Typography sx={{ flex: 1, textAlign: "right" }}>
+          {params.row.on_sale
+            ? `${calcDiscountFromPrices(
+                params.row.pre_discount_price,
+                params.row.price
+              )}%`
+            : "—"}
+        </Typography>
+      ),
     },
     {
       field: "sold_count",
       headerName: "Sold",
-      width: 80,
+      width: 50,
+      renderCell: (params) => (
+        <Typography sx={{ flex: 1, textAlign: "right" }}>
+          {params.value}
+        </Typography>
+      ),
     },
     {
       field: "status",
@@ -228,21 +256,25 @@ export default function ProductsPage() {
       sortable: false,
       renderCell: (params) => (
         <Box sx={{ flex: 1, justifyContent: "space-between" }}>
-          <IconButton
-            size="large"
-            sx={{ flex: 1 }}
-            onClick={() => navigate(`/products/${params.row.id}`)}
-          >
-            <EditIcon fontSize="small" />
-          </IconButton>
-          <IconButton
-            size="medium"
-            sx={{ flex: 1 }}
-            color="error"
-            onClick={() => handleDeleteClick(params.row)}
-          >
-            <DeleteIcon fontSize="small" />
-          </IconButton>
+          <Tooltip title="Edit">
+            <IconButton
+              size="large"
+              sx={{ flex: 1 }}
+              onClick={() => navigate(`/products/${params.row.id}`)}
+            >
+              <EditIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
+          <Tooltip title="Delete">
+            <IconButton
+              size="medium"
+              sx={{ flex: 1 }}
+              color="error"
+              onClick={() => handleDeleteClick(params.row)}
+            >
+              <DeleteIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
         </Box>
       ),
     },
@@ -276,7 +308,7 @@ export default function ProductsPage() {
           <Button variant="outlined" onClick={loadProducts}>
             Refresh
           </Button>
-          <Button variant="outlined" onClick={() => navigate("/")}>
+          <Button variant="outlined" onClick={() => navigate("/dashboard")}>
             Back
           </Button>
         </Box>

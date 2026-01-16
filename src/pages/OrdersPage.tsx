@@ -51,6 +51,32 @@ export default function OrdersPage() {
     loadOrders();
   }, []);
 
+  const allSelected = selectedStatuses.length === ALL_STATUSES.length;
+
+const toggleSelectAll = (checked: boolean) => {
+  setSelectedStatuses(checked ? ALL_STATUSES : []);
+};
+
+const totalCount = orders.length;
+
+
+  const statusCounts = useMemo(() => {
+  const counts: Record<OrderStatus, number> = {
+    pending: 0,
+    processing: 0,
+    shipped: 0,
+    delivered: 0,
+    cancelled: 0,
+  };
+
+  orders.forEach((o) => {
+    counts[o.status as OrderStatus]++;
+  });
+
+  return counts;
+}, [orders]);
+
+
   const loadOrders = async () => {
     setLoading(true);
     const data = await fetchAllOrders();
@@ -87,14 +113,30 @@ export default function OrdersPage() {
       headerName: "Total",
       width: 120,
       renderCell: (params) => (
-        <Typography fontWeight={600}>Rs. {params.value}</Typography>
+        <Typography fontWeight={600} sx={{ textAlign: "right", flex: 1 }}>
+          {params.value}
+        </Typography>
       ),
     },
-    { field: "payment_method", headerName: "Payment", width: 140 },
+    {
+      field: "profit",
+      headerName: "Profit",
+      width: 120,
+      renderCell: (params) => (
+        <Typography
+          fontWeight={600}
+          color="success"
+          sx={{ textAlign: "right", flex: 1 }}
+        >
+          {params.value}
+        </Typography>
+      ),
+    },
+    { field: "payment_method", headerName: "Payment", width: 100 },
     {
       field: "status",
       headerName: "Status",
-      width: 140,
+      width: 100,
       renderCell: (params) => (
         <Chip
           size="small"
@@ -112,11 +154,12 @@ export default function OrdersPage() {
     {
       field: "actions",
       headerName: "Actions",
-      width: 90,
+      width: 70,
       sortable: false,
       renderCell: (params) => (
         <IconButton
-          size="small"
+          size="large"
+          sx={{ flex: 1 }}
           onClick={() => setSelectedOrderId(params.row.id)}
         >
           <VisibilityIcon fontSize="small" />
@@ -150,7 +193,7 @@ export default function OrdersPage() {
           <Button variant="outlined" onClick={loadOrders}>
             Refresh
           </Button>
-          <Button variant="outlined" onClick={() => navigate('/')}>
+          <Button variant="outlined" onClick={() => navigate("/dashboard")}>
             Back
           </Button>
         </Box>
@@ -176,10 +219,23 @@ export default function OrdersPage() {
             />
           </Box>
           <FormGroup row>
+            <FormControlLabel
+    label={`All (${totalCount})`}
+    control={
+      <Checkbox
+        size="small"
+        checked={allSelected}
+        indeterminate={
+          selectedStatuses.length > 0 && !allSelected
+        }
+        onChange={(e) => toggleSelectAll(e.target.checked)}
+      />
+    }
+  />
             {ALL_STATUSES.map((status) => (
               <FormControlLabel
                 key={status}
-                label={status}
+                label={`${status} (${statusCounts[status]})`}
                 control={
                   <Checkbox
                     size="small"
