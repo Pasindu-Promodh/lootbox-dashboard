@@ -227,25 +227,52 @@ export default function ProductsPage() {
     {
       field: "status",
       headerName: "Status",
-      width: 80,
+      width: 100,
       sortable: false,
       renderCell: (params) => (
-        <Box display="flex">
-          {params.row.featured && (
-            <Tooltip title="Featured">
-              <StarIcon color="warning" sx={{ fontSize: 18, mr: 0.5 }} />
-            </Tooltip>
-          )}
-          {params.row.in_stock && (
-            <Tooltip title="In stock">
-              <InventoryIcon color="success" sx={{ fontSize: 18, mr: 0.5 }} />
-            </Tooltip>
-          )}
-          {params.row.on_sale && (
-            <Tooltip title="On sale">
-              <LoyaltyIcon color="error" sx={{ fontSize: 18 }} />
-            </Tooltip>
-          )}
+        <Box display="flex" width="100%">
+          <Box
+            sx={{
+              flex: 1,
+              alignItems: "center",
+              display: "flex",
+              justifyContent: "center",
+            }}
+          >
+            {params.row.featured && (
+              <Tooltip title="Featured">
+                <StarIcon color="warning" />
+              </Tooltip>
+            )}
+          </Box>
+          <Box
+            sx={{
+              flex: 1,
+              alignItems: "center",
+              display: "flex",
+              justifyContent: "center",
+            }}
+          >
+            {params.row.in_stock && (
+              <Tooltip title="In stock">
+                <InventoryIcon color="success" />
+              </Tooltip>
+            )}
+          </Box>
+          <Box
+            sx={{
+              flex: 1,
+              alignItems: "center",
+              display: "flex",
+              justifyContent: "center",
+            }}
+          >
+            {params.row.on_sale && (
+              <Tooltip title="On sale">
+                <LoyaltyIcon color="error" />
+              </Tooltip>
+            )}
+          </Box>
         </Box>
       ),
     },
@@ -255,26 +282,37 @@ export default function ProductsPage() {
       width: 100,
       sortable: false,
       renderCell: (params) => (
-        <Box sx={{ flex: 1, justifyContent: "space-between" }}>
-          <Tooltip title="Edit">
-            <IconButton
-              size="large"
-              sx={{ flex: 1 }}
-              onClick={() => navigate(`/products/${params.row.id}`)}
-            >
-              <EditIcon fontSize="small" />
-            </IconButton>
-          </Tooltip>
-          <Tooltip title="Delete">
-            <IconButton
-              size="medium"
-              sx={{ flex: 1 }}
-              color="error"
-              onClick={() => handleDeleteClick(params.row)}
-            >
-              <DeleteIcon fontSize="small" />
-            </IconButton>
-          </Tooltip>
+        <Box display="flex" width="100%">
+          <Box
+            sx={{
+              flex: 1,
+              alignItems: "center",
+              display: "flex",
+              justifyContent: "center",
+            }}
+          >
+            <Tooltip title="Edit">
+              <IconButton
+                onClick={() => navigate(`/products/${params.row.id}`)}
+              >
+                <EditIcon />
+              </IconButton>
+            </Tooltip>
+          </Box>
+          <Box
+            sx={{
+              flex: 1,
+              alignItems: "center",
+              display: "flex",
+              justifyContent: "center",
+            }}
+          >
+            <Tooltip title="Delete">
+              <IconButton onClick={() => handleDeleteClick(params.row)}>
+                <DeleteIcon color="error" />
+              </IconButton>
+            </Tooltip>
+          </Box>
         </Box>
       ),
     },

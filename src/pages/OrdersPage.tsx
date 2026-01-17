@@ -8,8 +8,11 @@ import {
   Checkbox,
   FormControlLabel,
   FormGroup,
+  Tooltip,
+  Snackbar,
 } from "@mui/material";
 import VisibilityIcon from "@mui/icons-material/Visibility";
+import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import { DataGrid, type GridColDef } from "@mui/x-data-grid";
 import { useEffect, useMemo, useState } from "react";
 import { fetchAllOrders } from "../services/orders";
@@ -43,6 +46,7 @@ export default function OrdersPage() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [copied, setCopied] = useState(false);
   const [selectedStatuses, setSelectedStatuses] =
     useState<OrderStatus[]>(SELECTED_STATUSES);
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
@@ -53,29 +57,27 @@ export default function OrdersPage() {
 
   const allSelected = selectedStatuses.length === ALL_STATUSES.length;
 
-const toggleSelectAll = (checked: boolean) => {
-  setSelectedStatuses(checked ? ALL_STATUSES : []);
-};
-
-const totalCount = orders.length;
-
-
-  const statusCounts = useMemo(() => {
-  const counts: Record<OrderStatus, number> = {
-    pending: 0,
-    processing: 0,
-    shipped: 0,
-    delivered: 0,
-    cancelled: 0,
+  const toggleSelectAll = (checked: boolean) => {
+    setSelectedStatuses(checked ? ALL_STATUSES : []);
   };
 
-  orders.forEach((o) => {
-    counts[o.status as OrderStatus]++;
-  });
+  const totalCount = orders.length;
 
-  return counts;
-}, [orders]);
+  const statusCounts = useMemo(() => {
+    const counts: Record<OrderStatus, number> = {
+      pending: 0,
+      processing: 0,
+      shipped: 0,
+      delivered: 0,
+      cancelled: 0,
+    };
 
+    orders.forEach((o) => {
+      counts[o.status as OrderStatus]++;
+    });
+
+    return counts;
+  }, [orders]);
 
   const loadOrders = async () => {
     setLoading(true);
@@ -100,10 +102,26 @@ const totalCount = orders.length;
   const columns: GridColDef[] = [
     {
       field: "id",
-      headerName: "Order ID",
-      width: 140,
+      headerName: "ID",
+      width: 130,
       renderCell: (params) => (
-        <Typography fontWeight={500}>#{params.value.slice(0, 8)}</Typography>
+        <Box
+          display="flex"
+          alignItems="center"
+          gap={0.5}
+          sx={{ cursor: "pointer" }}
+          onClick={() => {
+            navigator.clipboard.writeText(params.value);
+            setCopied(true);
+          }}
+        >
+          <Typography fontWeight={500} title={params.value}>
+            {params.value.slice(0, 8)}
+          </Typography>
+          <Tooltip title="Copy ID">
+            <ContentCopyIcon sx={{ fontSize: 16 }} />
+          </Tooltip>
+        </Box>
       ),
     },
     { field: "customer_name", headerName: "Customer", flex: 1, minWidth: 180 },
@@ -132,7 +150,6 @@ const totalCount = orders.length;
         </Typography>
       ),
     },
-    { field: "payment_method", headerName: "Payment", width: 100 },
     {
       field: "status",
       headerName: "Status",
@@ -149,7 +166,7 @@ const totalCount = orders.length;
       field: "created_at",
       headerName: "Date",
       width: 160,
-      renderCell: (params) => new Date(params.value).toLocaleString(),
+      renderCell: (params) => new Date(params.value).toLocaleString(undefined, {timeStyle: 'short', dateStyle: 'short'}),
     },
     {
       field: "actions",
@@ -157,6 +174,7 @@ const totalCount = orders.length;
       width: 70,
       sortable: false,
       renderCell: (params) => (
+        <Tooltip title="View">
         <IconButton
           size="large"
           sx={{ flex: 1 }}
@@ -164,6 +182,7 @@ const totalCount = orders.length;
         >
           <VisibilityIcon fontSize="small" />
         </IconButton>
+        </Tooltip>
       ),
     },
   ];
@@ -220,18 +239,16 @@ const totalCount = orders.length;
           </Box>
           <FormGroup row>
             <FormControlLabel
-    label={`All (${totalCount})`}
-    control={
-      <Checkbox
-        size="small"
-        checked={allSelected}
-        indeterminate={
-          selectedStatuses.length > 0 && !allSelected
-        }
-        onChange={(e) => toggleSelectAll(e.target.checked)}
-      />
-    }
-  />
+              label={`All (${totalCount})`}
+              control={
+                <Checkbox
+                  size="small"
+                  checked={allSelected}
+                  indeterminate={selectedStatuses.length > 0 && !allSelected}
+                  onChange={(e) => toggleSelectAll(e.target.checked)}
+                />
+              }
+            />
             {ALL_STATUSES.map((status) => (
               <FormControlLabel
                 key={status}
@@ -286,6 +303,14 @@ const totalCount = orders.length;
           orderId={selectedOrderId}
         />
       )}
+
+      {/* Copy feedback */}
+      <Snackbar
+        open={copied}
+        autoHideDuration={1500}
+        onClose={() => setCopied(false)}
+        message="Order ID copied"
+      />
     </Box>
   );
 }

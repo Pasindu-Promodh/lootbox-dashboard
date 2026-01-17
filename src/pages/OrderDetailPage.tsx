@@ -210,6 +210,7 @@ import {
   TextField,
   Tooltip,
   IconButton,
+  Snackbar,
 } from "@mui/material";
 import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import { useEffect, useState } from "react";
@@ -288,6 +289,8 @@ export default function OrderDetailPage({
   const [statusDialogOpen, setStatusDialogOpen] = useState(false);
   const [nextStatus, setNextStatus] = useState<OrderStatus | null>(null);
   const [note, setNote] = useState("");
+  const [copied, setCopied] = useState(false);
+  const [snackbarText, setSnackbarText] = useState("");
 
   useEffect(() => {
     if (!orderId) return;
@@ -373,16 +376,16 @@ export default function OrderDetailPage({
       `Phone 1: ${order.phone1}`,
       `Phone 2: ${order.phone2 || "—"}`,
       `Total: Rs. ${order.total}`,
+      `Profit: Rs. ${order.profit}`,
       "Items:",
       ...items.map(
-        (i) =>
-          `• ${i.product?.name ?? "Product removed"} (Qty: ${i.qty}) - ${
-            i.product?.images?.[0]?.thumb ?? "No image"
-          }`
+        (i) => `• ${i.product?.name ?? "Product removed"} (Qty: ${i.qty})`
       ),
     ].join("\n");
     navigator.clipboard.writeText(details);
-    alert("Order details copied!");
+    setSnackbarText("Order details copied to clipboard");
+    setCopied(true);
+    // alert("Order details copied!");
   };
 
   if (loading || !order)
@@ -393,9 +396,18 @@ export default function OrderDetailPage({
     );
 
   return (
-    <Dialog open={open} fullScreen onClose={onClose}>
-      <DialogTitle>
-        Order #{order.id.slice(0, 8)}
+    <Dialog
+      open={open}
+      fullScreen
+      onClose={onClose}
+      PaperProps={{
+        sx: {
+          backgroundColor: "#f8fafc",
+        },
+      }}
+    >
+      {/* <DialogTitle>
+        #{order.id}
         <Box sx={{ float: "right" }}>
           <Tooltip title="Copy Order Details">
             <IconButton onClick={copyOrderDetails}>
@@ -406,7 +418,109 @@ export default function OrderDetailPage({
             Back
           </Button>
         </Box>
+      </DialogTitle> */}
+
+      <DialogTitle
+        px={{ xs: 2, sm: 4 }}
+        py={2}
+        mb={2}
+        display="flex"
+        justifyContent="space-between"
+        alignItems="center"
+        bgcolor="#fff"
+        boxShadow="0 1px 8px rgba(0,0,0,0.05)"
+      >
+        <Box>
+          <Box display="flex" alignItems="center" gap={1}>
+            <Typography variant="h6">#{order.id}</Typography>
+
+            <Tooltip title="Copy ID">
+              <IconButton
+                onClick={() => {
+                  navigator.clipboard.writeText(order.id);
+                  setSnackbarText("Order ID copied to clipboard");
+                  setCopied(true);
+                }}
+              >
+                <ContentCopyIcon />
+              </IconButton>
+            </Tooltip>
+          </Box>
+          <Typography variant="body2" color="text.secondary">
+            {new Date(order.created_at).toLocaleString(undefined, {
+              timeStyle: "short",
+              dateStyle: "short",
+            })}
+          </Typography>
+        </Box>
+
+        <Box display="flex" alignItems="center" gap={2}>
+          <Button variant="outlined" onClick={copyOrderDetails}>
+            Copy
+          </Button>
+          <Button variant="outlined" onClick={onClose}>
+            Back
+          </Button>
+        </Box>
       </DialogTitle>
+
+      {/* <DialogTitle
+        px={{ xs: 2, sm: 4 }}
+        py={2}
+        mb={2}
+        display="flex"
+        justifyContent="space-between"
+        alignItems="center"
+        bgcolor="#fff"
+        boxShadow="0 1px 8px rgba(0,0,0,0.05)"
+      >
+        <Box>
+          <Typography variant="h6">
+            #{order.id}
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            {new Date(order.created_at).toLocaleString(undefined, {
+              timeStyle: "short",
+              dateStyle: "short",
+            })}
+          </Typography>
+        </Box>
+        <Tooltip title="Copy Order Details">
+            <IconButton onClick={copyOrderDetails}>
+              <ContentCopyIcon />
+            </IconButton>
+          </Tooltip>
+        <Button variant="outlined" onClick={onClose}>
+          Back
+        </Button>
+      </DialogTitle> */}
+
+      {/* <DialogTitle sx={{ display: "flex", alignItems: "center" }}>
+        <Box>
+          <Typography variant="h6">#{order.id}</Typography>
+          <Typography variant="caption" color="text.secondary">
+            {new Date(order.created_at).toLocaleString(undefined, {
+              year: "numeric",
+              month: "short",
+              day: "2-digit",
+              hour: "2-digit",
+              minute: "2-digit",
+            })}
+          </Typography>
+        </Box>
+
+        <Box sx={{ ml: "auto", display: "flex", gap: 1 }}>
+          <Tooltip title="Copy Order Details">
+            <IconButton onClick={copyOrderDetails} size="small">
+              <ContentCopyIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
+
+          <Button onClick={onClose} size="small">
+            Back
+          </Button>
+        </Box>
+      </DialogTitle> */}
 
       <DialogContent>
         <Stack direction={{ xs: "column", md: "row" }} spacing={3}>
@@ -480,8 +594,7 @@ export default function OrderDetailPage({
                               item.pre_discount_price) *
                               100
                           )}
-                          % / Rs.{" "}
-                          {item.pre_discount_price - item.price} per
+                          % / Rs. {item.pre_discount_price - item.price} per
                           item
                         </Typography>
                       )}
@@ -505,17 +618,17 @@ export default function OrderDetailPage({
               />
               {order.discount > 0 && (
                 <>
-                <Row
-                  label="Discount"
-                  value={order.discount}
-                  minus
-                  type={"error"}
-                />
-                <Row
-                  label="Discounted Subtotal"
-                  value={order.subtotal}
-                  type={"text.primary"}
-                />
+                  <Row
+                    label="Discount"
+                    value={order.discount}
+                    minus
+                    type={"error"}
+                  />
+                  <Row
+                    label="Discounted Subtotal"
+                    value={order.subtotal}
+                    type={"text.primary"}
+                  />
                 </>
               )}
 
@@ -709,6 +822,14 @@ export default function OrderDetailPage({
           </DialogActions>
         </Dialog>
       </DialogContent>
+
+      {/* Copy feedback */}
+      <Snackbar
+        open={copied}
+        autoHideDuration={1500}
+        onClose={() => setCopied(false)}
+        message={snackbarText}
+      />
     </Dialog>
   );
 }
