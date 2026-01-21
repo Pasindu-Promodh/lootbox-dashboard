@@ -528,7 +528,7 @@ export default function ProductFormPage() {
   const [localImages, setLocalImages] = useState<LocalImage[]>([]);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
 
-  const [margin, setMargin] = useState(0);
+  const [margin, setMargin] = useState(20);
   const [discount, setDiscount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
