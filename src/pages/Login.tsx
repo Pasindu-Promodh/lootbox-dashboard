@@ -65,8 +65,8 @@ export default function Login() {
       await supabase.auth.signInWithOAuth({
         provider: "google",
         options: {
-          // redirectTo: "https://pasindu-promodh.github.io/lootbox-dashboard/",
-          redirectTo: `http://localhost:5173`,
+          redirectTo: "https://pasindu-promodh.github.io/lootbox-dashboard/",
+          // redirectTo: `http://localhost:5173`,
           queryParams: { prompt: "select_account" },
         },
       });
