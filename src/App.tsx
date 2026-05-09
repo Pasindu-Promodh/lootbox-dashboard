@@ -81,7 +81,6 @@
 //   );
 // }
 
-
 import { HashRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import Login from "./pages/Login";
@@ -92,6 +91,7 @@ import OrdersPage from "./pages/OrdersPage";
 import Finance from "./pages/Finance";
 import { CategoriesProvider } from "./context/CategoriesContext";
 import type { JSX } from "react";
+import BulkImportPage from "./pages/Bulkimportpage";
 
 /* ---------- Protected Route ---------- */
 const ProtectedRoute = ({ children }: { children: JSX.Element }) => {
@@ -173,6 +173,7 @@ export default function App() {
                 </ProtectedRoute>
               }
             />
+            <Route path="/products/bulk-import" element={<BulkImportPage />} />
 
             {/* Orders */}
             <Route
