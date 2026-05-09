@@ -59,7 +59,7 @@ export default function ProductsPage() {
 
   const loadProducts = async () => {
     setLoading(true);
-    const data = await getProducts({ limit: 500 }); // ← was 50, bump to 500 or whatever covers your catalog
+    const data = await getProducts({ limit: 10000 }); // ← was 50, bump to 500 or whatever covers your catalog
     setProducts(data);
     setLoading(false);
   };

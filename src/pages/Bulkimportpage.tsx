@@ -22,7 +22,7 @@ import {
   FolderOpen,
   Warning,
 } from "@mui/icons-material";
-import { useRef, useState } from "react";
+import { useRef, useState, useMemo, useEffect, useCallback, useLayoutEffect } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { addProduct } from "../services/productsCrud";
@@ -43,33 +43,254 @@ type ImportRow = {
   status: "pending" | "running" | "success" | "error" | "missing_image";
   imageProgress: number;
   parsedPrice: number;
-  filename: string; // extracted from the URL
+  filename: string;
   error?: string;
 };
 
 /* ─────────────────────── Helpers ─────────────────────── */
 
-/** "Rs. 1,250.00" → 1250 */
 const parsePrice = (raw: string): number => {
   const s = raw.replace(/Rs\.?\s*/i, "").replace(/,/g, "").trim();
   const num = Math.floor(parseFloat(s));
   return isNaN(num) ? 0 : num;
 };
 
-/** Extract filename from URL: ".../GScEfu3Q....jpg" → "GScEfu3Q....jpg" */
 const filenameFromUrl = (url: string): string =>
   url.split("/").pop() ?? url;
 
 const BATCH_SIZE = 3;
 
-/* ─────────────────────── Component ─────────────────────── */
+/* ─────────────────────── Row thumbnail (lazy, self-cleaning) ─────────────────────── */
+
+const RowThumbnail = ({
+  file,
+  fallbackUrl,
+  missing,
+}: {
+  file: File | undefined;
+  fallbackUrl: string;
+  missing: boolean;
+}) => {
+  const [src, setSrc] = useState<string>("");
+
+  useEffect(() => {
+    if (!file) { setSrc(fallbackUrl); return; }
+    const url = URL.createObjectURL(file);
+    setSrc(url);
+    return () => URL.revokeObjectURL(url);
+  }, [file, fallbackUrl]);
+
+  return (
+    <Box
+      component="img"
+      src={src}
+      alt=""
+      loading="lazy"
+      sx={{
+        width: 44, height: 44, objectFit: "cover",
+        borderRadius: 1, flexShrink: 0, bgcolor: "#e2e8f0",
+        opacity: missing ? 0.4 : 1,
+      }}
+    />
+  );
+};
+
+/* ─────────────────────── DOM-direct progress bar ─────────────────────── */
+
+/**
+ * This bar is intentionally NOT driven by React state.
+ * The parent calls `setProgress(n)` via a ref, which writes directly to the
+ * DOM element's style — zero React renders, zero stutter.
+ */
+type ProgressBarHandle = { setProgress: (pct: number) => void };
+
+const DirectProgressBar = ({
+  handleRef,
+  label,
+}: {
+  handleRef: React.MutableRefObject<ProgressBarHandle | null>;
+  label: string;
+}) => {
+  const barRef = useRef<HTMLDivElement>(null);
+  const labelRef = useRef<HTMLSpanElement>(null);
+
+  useLayoutEffect(() => {
+    handleRef.current = {
+      setProgress(pct: number) {
+        if (barRef.current) {
+          barRef.current.style.width = `${pct}%`;
+        }
+        if (labelRef.current) {
+          labelRef.current.textContent =
+            pct < 100 ? `${label} ${pct}%` : "Saving product…";
+        }
+      },
+    };
+    return () => { handleRef.current = null; };
+  }, [handleRef, label]);
+
+  return (
+    <Box mt={1} pl={7}>
+      <Typography component="span" variant="caption" color="text.secondary">
+        <span ref={labelRef}>{label} 0%</span>
+      </Typography>
+      {/* Plain div bar — no MUI state involved */}
+      <Box
+        sx={{
+          mt: 0.5, height: 4, borderRadius: 1,
+          bgcolor: "#e2e8f0", overflow: "hidden",
+        }}
+      >
+        <Box
+          ref={barRef}
+          sx={{
+            height: "100%", width: "0%",
+            bgcolor: "primary.main", borderRadius: 1,
+            transition: "width 0.1s linear",
+          }}
+        />
+      </Box>
+    </Box>
+  );
+};
+
+/* ─────────────────────── Virtualized row list ─────────────────────── */
+
+const VISIBLE_BUFFER = 20;
+const ROW_HEIGHT = 68;
+
+const VirtualRowList = ({
+  rows,
+  imageMap,
+  progressRefs,
+}: {
+  rows: ImportRow[];
+  imageMap: Map<string, File>;
+  /** Ref handles keyed by row index — populated by DirectProgressBar */
+  progressRefs: React.MutableRefObject<Map<number, ProgressBarHandle>>;
+}) => {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [scrollTop, setScrollTop] = useState(0);
+  const [containerHeight, setContainerHeight] = useState(520);
+
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => setContainerHeight(el.clientHeight));
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  const onScroll = useCallback((e: React.UIEvent<HTMLDivElement>) => {
+    setScrollTop((e.target as HTMLDivElement).scrollTop);
+  }, []);
+
+  const startIdx = Math.max(0, Math.floor((scrollTop - VISIBLE_BUFFER) / ROW_HEIGHT));
+  const endIdx = Math.min(rows.length, Math.ceil((scrollTop + containerHeight + VISIBLE_BUFFER) / ROW_HEIGHT));
+
+  const visibleRows = rows.slice(startIdx, endIdx);
+  const paddingTop = startIdx * ROW_HEIGHT;
+  const paddingBottom = (rows.length - endIdx) * ROW_HEIGHT;
+
+  return (
+    <Box ref={containerRef} sx={{ maxHeight: 520, overflowY: "auto" }} onScroll={onScroll}>
+      {paddingTop > 0 && <Box sx={{ height: paddingTop }} />}
+
+      {visibleRows.map((row, relIdx) => {
+        const idx = startIdx + relIdx;
+        const file = imageMap.get(row.filename);
+
+        // A stable per-row ref handle that DirectProgressBar registers itself into
+        const rowHandleRef: React.MutableRefObject<ProgressBarHandle | null> = {
+          get current() { return progressRefs.current.get(idx) ?? null; },
+          set current(v) {
+            if (v) progressRefs.current.set(idx, v);
+            else progressRefs.current.delete(idx);
+          },
+        };
+
+        return (
+          <Box
+            key={idx}
+            px={3}
+            py={1.5}
+            sx={{
+              borderBottom: "1px solid #f1f5f9",
+              bgcolor:
+                row.status === "success"       ? "#f0fdf4"
+                : row.status === "error"       ? "#fff1f2"
+                : row.status === "running"     ? "#eff6ff"
+                : row.status === "missing_image" ? "#fffbeb"
+                : "transparent",
+              transition: "background 0.2s",
+            }}
+          >
+            <Box display="flex" alignItems="center" gap={2}>
+              <RowThumbnail file={file} fallbackUrl={row.raw.Image} missing={row.status === "missing_image"} />
+
+              <Box flex={1} minWidth={0}>
+                <Typography
+                  variant="body2" noWrap title={row.raw.Name}
+                  fontWeight={row.status === "running" ? 600 : 400}
+                  color={row.status === "missing_image" ? "text.disabled" : "text.primary"}
+                >
+                  {row.raw.Name}
+                </Typography>
+                {row.status === "missing_image" && (
+                  <Typography variant="caption" color="warning.main">
+                    Image not found in folder — will be skipped
+                  </Typography>
+                )}
+                {row.status === "error" && (
+                  <Typography variant="caption" color="error">{row.error}</Typography>
+                )}
+              </Box>
+
+              <Typography variant="body2" color="text.secondary" sx={{ flexShrink: 0 }}>
+                Rs. {row.parsedPrice.toLocaleString("en-US")}
+              </Typography>
+
+              <Box sx={{ flexShrink: 0, width: 24, textAlign: "center" }}>
+                {row.status === "success"       && <CheckCircle fontSize="small" color="success" />}
+                {row.status === "error"         && <ErrorIcon   fontSize="small" color="error"   />}
+                {row.status === "missing_image" && <Warning     fontSize="small" color="warning" />}
+                {row.status === "running" && (
+                  <Box sx={{
+                    width: 16, height: 16,
+                    border: "2px solid #3b82f6",
+                    borderTop: "2px solid transparent",
+                    borderRadius: "50%",
+                    animation: "spin 0.8s linear infinite",
+                    mx: "auto",
+                    "@keyframes spin": { to: { transform: "rotate(360deg)" } },
+                  }} />
+                )}
+              </Box>
+            </Box>
+
+            {/* Progress bar rendered only while running; driven directly via DOM */}
+            {row.status === "running" && (
+              <DirectProgressBar
+                handleRef={rowHandleRef}
+                label="Uploading to storage…"
+              />
+            )}
+          </Box>
+        );
+      })}
+
+      {paddingBottom > 0 && <Box sx={{ height: paddingBottom }} />}
+    </Box>
+  );
+};
+
+/* ─────────────────────── Main Component ─────────────────────── */
 
 export default function BulkImportPage() {
   const navigate = useNavigate();
   const { ensureCategoryAndSub } = useCategories();
 
   const [rows, setRows] = useState<ImportRow[]>([]);
-  // Map of filename → File object from the chosen folder
   const [imageMap, setImageMap] = useState<Map<string, File>>(new Map());
   const [folderName, setFolderName] = useState<string>("");
 
@@ -79,28 +300,42 @@ export default function BulkImportPage() {
   const abortedRef = useRef(false);
   const categoryEnsuredRef = useRef(false);
 
-  /* ── Derived counts ── */
-  const total = rows.length;
-  const matchedCount = rows.filter(
-    (r) => r.status !== "missing_image"
-  ).length;
-  const missingCount = rows.filter(
-    (r) => r.status === "missing_image"
-  ).length;
-  const successCount = rows.filter((r) => r.status === "success").length;
-  const errorCount = rows.filter((r) => r.status === "error").length;
-  const processedCount = successCount + errorCount;
-  const importableRows = rows.filter(
-    (r) =>
-      r.status === "pending" ||
-      r.status === "running" ||
-      r.status === "error"
-  );
-  const progress = importableRows.length + processedCount > 0
-    ? Math.round((processedCount / (importableRows.length + processedCount)) * 100)
-    : 0;
+  /**
+   * Upload progress lives entirely outside React state.
+   * Keys are row indexes, values are 0–100.
+   * DirectProgressBar components register their DOM handles here so
+   * processOne can push updates without triggering any re-renders.
+   */
+  const progressRefs = useRef<Map<number, ProgressBarHandle>>(new Map());
 
-  const canStart = matchedCount > 0 && !running && !done;
+  /* ── Derived counts (memoized — only recalculates on status changes) ── */
+  const {
+    total,
+    matchedCount,
+    missingCount,
+    successCount,
+    errorCount,
+    processedCount,
+    importableRows,
+    progress,
+    canStart,
+  } = useMemo(() => {
+    const total = rows.length;
+    const matchedCount = rows.filter((r) => r.status !== "missing_image").length;
+    const missingCount = rows.filter((r) => r.status === "missing_image").length;
+    const successCount = rows.filter((r) => r.status === "success").length;
+    const errorCount = rows.filter((r) => r.status === "error").length;
+    const processedCount = successCount + errorCount;
+    const importableRows = rows.filter(
+      (r) => r.status === "pending" || r.status === "running" || r.status === "error"
+    );
+    const progress =
+      importableRows.length + processedCount > 0
+        ? Math.round((processedCount / (importableRows.length + processedCount)) * 100)
+        : 0;
+    const canStart = matchedCount > 0 && !running && !done;
+    return { total, matchedCount, missingCount, successCount, errorCount, processedCount, importableRows, progress, canStart };
+  }, [rows, running, done]);
 
   /* ── JSON file pick ── */
   const handleJsonPick = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -111,15 +346,10 @@ export default function BulkImportPage() {
       try {
         const parsed: RawProduct[] = JSON.parse(ev.target?.result as string);
         if (!Array.isArray(parsed)) throw new Error("Not an array");
-        setRows(
-          parsed.map((raw) => ({
-            raw,
-            status: "pending",
-            imageProgress: 0,
-            parsedPrice: parsePrice(raw.Price),
-            filename: filenameFromUrl(raw.Image),
-          }))
-        );
+        setRows(parsed.map((raw) => ({
+          raw, status: "pending", imageProgress: 0,
+          parsedPrice: parsePrice(raw.Price), filename: filenameFromUrl(raw.Image),
+        })));
         setDone(false);
         abortedRef.current = false;
         pausedRef.current = false;
@@ -138,88 +368,82 @@ export default function BulkImportPage() {
     if (!files || files.length === 0) return;
 
     const map = new Map<string, File>();
-    for (const file of Array.from(files)) {
-      // file.name is just the filename (no path)
-      map.set(file.name, file);
-    }
+    for (const file of Array.from(files)) map.set(file.name, file);
     setImageMap(map);
 
-    // Get folder name from webkitRelativePath: "foldername/file.jpg"
     const firstPath = files[0].webkitRelativePath;
     setFolderName(firstPath.split("/")[0] ?? "");
 
-    // Re-evaluate which rows now have a matching image
     if (rows.length > 0) {
       setRows((prev) =>
         prev.map((row) => {
-          if (row.status === "success") return row; // don't touch done rows
-          const hasFile = map.has(row.filename);
-          return {
-            ...row,
-            status: hasFile ? "pending" : "missing_image",
-          };
+          if (row.status === "success") return row;
+          return { ...row, status: map.has(row.filename) ? "pending" : "missing_image" };
         })
       );
     }
-
     e.target.value = "";
   };
 
-  /* ── Patch a single row ── */
-  const patchRow = (index: number, patch: Partial<ImportRow>) => {
+  /**
+   * Patch only status/error — never imageProgress.
+   * Progress is handled by DirectProgressBar via progressRefs, not React state.
+   */
+  const patchRow = useCallback((index: number, patch: Partial<Omit<ImportRow, "imageProgress">>) => {
     setRows((prev) => {
       const next = [...prev];
       next[index] = { ...next[index], ...patch };
       return next;
     });
-  };
+  }, []);
 
   /* ── Process one product ── */
-  const processOne = async (index: number, row: ImportRow) => {
-    patchRow(index, { status: "running", imageProgress: 0, error: undefined });
+  const processOne = useCallback(
+    async (index: number, row: ImportRow) => {
+      patchRow(index, { status: "running", error: undefined });
 
-    try {
-      const price = row.parsedPrice;
+      try {
+        const price = row.parsedPrice;
 
-      if (!categoryEnsuredRef.current) {
-        const ok = await ensureCategoryAndSub("Other", "Other");
-        if (!ok) throw new Error("Failed to create category");
-        categoryEnsuredRef.current = true;
+        if (!categoryEnsuredRef.current) {
+          const ok = await ensureCategoryAndSub("Other", "Other");
+          if (!ok) throw new Error("Failed to create category");
+          categoryEnsuredRef.current = true;
+        }
+
+        const imageFile = imageMap.get(row.filename);
+        if (!imageFile) throw new Error(`Image file not found: ${row.filename}`);
+
+        const imageSet = await uploadProductImageSet(imageFile, (prog) => {
+          // Write directly to the DOM element — no setState, no re-render
+          progressRefs.current.get(index)?.setProgress(prog);
+        });
+        if (!imageSet) throw new Error("Image upload failed");
+
+        const sellingPrice = Math.round(price + (price * 20) / 100);
+        const success = await addProduct({
+          name: row.raw.Name,
+          description: row.raw.Description,
+          images: [imageSet],
+          category: "Other",
+          sub_category: "Other",
+          original_price: price,
+          pre_discount_price: sellingPrice,
+          price: sellingPrice,
+          featured: false,
+          in_stock: true,
+          on_sale: false,
+        });
+        if (!success) throw new Error("addProduct returned false");
+
+        patchRow(index, { status: "success" });
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : "Unknown error";
+        patchRow(index, { status: "error", error: msg });
       }
-
-      // 1️⃣  Get the local File — no network needed
-      const imageFile = imageMap.get(row.filename);
-      if (!imageFile) throw new Error(`Image file not found: ${row.filename}`);
-
-      // 2️⃣  Upload via your existing service (main + thumb)
-      const imageSet = await uploadProductImageSet(imageFile, (prog) => {
-        patchRow(index, { imageProgress: prog });
-      });
-      if (!imageSet) throw new Error("Image upload failed");
-
-      // 3️⃣  Save product (20% profit margin on top of original price)
-      const sellingPrice = Math.round(price + (price * 20) / 100);
-      const success = await addProduct({
-        name: row.raw.Name,
-        description: row.raw.Description,
-        images: [imageSet],
-        category: "Other",
-        sub_category: "Other",
-        original_price: price,
-        pre_discount_price: sellingPrice,
-        price: sellingPrice,
-        featured: false,
-        in_stock: true,
-        on_sale: false,
-      });
-      if (!success) throw new Error("addProduct returned false");
-
-      patchRow(index, { status: "success", imageProgress: 100 });
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : "Unknown error";
-      patchRow(index, { status: "error", error: msg, imageProgress: 0 });
-    }
-  };
+    },
+    [imageMap, patchRow, ensureCategoryAndSub]
+  );
 
   /* ── Start / resume ── */
   const handleStart = async () => {
@@ -229,6 +453,7 @@ export default function BulkImportPage() {
     setRunning(true);
     setDone(false);
 
+    // Snapshot the pending rows upfront — avoids iterating stale state inside the loop
     const pending = rows
       .map((r, i) => ({ r, i }))
       .filter(({ r }) => r.status === "pending" || r.status === "error");
@@ -249,7 +474,7 @@ export default function BulkImportPage() {
 
   const handlePause = () => {
     pausedRef.current = !pausedRef.current;
-    setRows((p) => [...p]);
+    setRows((p) => [...p]); // trigger re-render so Paused chip updates
   };
 
   const handleStop = () => {
@@ -301,16 +526,16 @@ export default function BulkImportPage() {
         </Button>
       </Box>
 
-      <Box p={4}  mx="auto" display="flex" flexDirection="column" gap={3}>
-
+      <Box p={4} mx="auto" display="flex" flexDirection="column" gap={3}>
         {/* ── Step 1: JSON ── */}
         <Paper variant="outlined" sx={{ p: 3, borderRadius: 2 }}>
           <Typography fontWeight={600} mb={0.5}>
             Step 1 — Choose JSON file
           </Typography>
           <Typography variant="body2" color="text.secondary" mb={2}>
-            Format: <code>{"[{ Image, Name, Description, Price }, ...]"}</code>.
-            The image filename is extracted from the <code>Image</code> URL and
+            Format:{" "}
+            <code>{"[{ Image, Name, Description, Price }, ...]"}</code>. The
+            image filename is extracted from the <code>Image</code> URL and
             matched against your local folder.
           </Typography>
           <Box display="flex" gap={2} alignItems="center" flexWrap="wrap">
@@ -321,10 +546,19 @@ export default function BulkImportPage() {
               disabled={running}
             >
               {rows.length ? "Replace JSON" : "Choose JSON"}
-              <input hidden type="file" accept=".json,application/json" onChange={handleJsonPick} />
+              <input
+                hidden
+                type="file"
+                accept=".json,application/json"
+                onChange={handleJsonPick}
+              />
             </Button>
             {rows.length > 0 && (
-              <Chip label={`${total} products`} color="primary" variant="outlined" />
+              <Chip
+                label={`${total} products`}
+                color="primary"
+                variant="outlined"
+              />
             )}
           </Box>
         </Paper>
@@ -348,11 +582,10 @@ export default function BulkImportPage() {
                 disabled={running}
               >
                 {folderName ? "Replace Folder" : "Choose Folder"}
-                {/* webkitdirectory lets the user pick an entire folder */}
                 <input
                   hidden
                   type="file"
-                  // @ts-ignore — webkitdirectory is not in the TS types but works in all modern browsers
+                  // @ts-ignore
                   webkitdirectory=""
                   onChange={handleFolderPick}
                 />
@@ -367,7 +600,6 @@ export default function BulkImportPage() {
               )}
             </Box>
 
-            {/* Match summary */}
             {folderName && (
               <Box display="flex" gap={1} mt={2} flexWrap="wrap">
                 <Chip
@@ -430,11 +662,17 @@ export default function BulkImportPage() {
                 </>
               )}
               {!running && (
-                <Button variant="outlined" color="secondary" onClick={handleReset}>
+                <Button
+                  variant="outlined"
+                  color="secondary"
+                  onClick={handleReset}
+                >
                   Clear
                 </Button>
               )}
-              {pausedRef.current && <Chip label="Paused" color="warning" size="small" />}
+              {pausedRef.current && (
+                <Chip label="Paused" color="warning" size="small" />
+              )}
             </Box>
 
             {(running || processedCount > 0) && (
@@ -458,16 +696,36 @@ export default function BulkImportPage() {
 
             {processedCount > 0 && (
               <Box display="flex" gap={1} flexWrap="wrap" mb={1}>
-                <Chip icon={<CheckCircle fontSize="small" />} label={`${successCount} succeeded`} color="success" size="small" variant="outlined" />
+                <Chip
+                  icon={<CheckCircle fontSize="small" />}
+                  label={`${successCount} succeeded`}
+                  color="success"
+                  size="small"
+                  variant="outlined"
+                />
                 {errorCount > 0 && (
-                  <Chip icon={<ErrorIcon fontSize="small" />} label={`${errorCount} failed`} color="error" size="small" variant="outlined" />
+                  <Chip
+                    icon={<ErrorIcon fontSize="small" />}
+                    label={`${errorCount} failed`}
+                    color="error"
+                    size="small"
+                    variant="outlined"
+                  />
                 )}
-                <Chip icon={<HourglassEmpty fontSize="small" />} label={`${importableRows.length - (running ? 0 : 0)} pending`} size="small" variant="outlined" />
+                <Chip
+                  icon={<HourglassEmpty fontSize="small" />}
+                  label={`${importableRows.length} pending`}
+                  size="small"
+                  variant="outlined"
+                />
               </Box>
             )}
 
             {done && (
-              <Alert severity={errorCount === 0 ? "success" : "warning"} sx={{ mt: 1 }}>
+              <Alert
+                severity={errorCount === 0 ? "success" : "warning"}
+                sx={{ mt: 1 }}
+              >
                 {errorCount === 0
                   ? `All ${successCount} products imported successfully!`
                   : `Done — ${successCount} succeeded, ${errorCount} failed. Click "Start Import" to retry failed ones.`}
@@ -476,114 +734,20 @@ export default function BulkImportPage() {
           </Paper>
         )}
 
-        {/* ── Product list ── */}
+        {/* ── Product list (virtualized) ── */}
         {rows.length > 0 && (
           <Paper variant="outlined" sx={{ borderRadius: 2, overflow: "hidden" }}>
             <Box px={3} py={1.5} bgcolor="#f1f5f9">
-              <Typography variant="caption" fontWeight={600} color="text.secondary">
-                PRODUCT LIST
+              <Typography
+                variant="caption"
+                fontWeight={600}
+                color="text.secondary"
+              >
+                PRODUCT LIST ({total})
               </Typography>
             </Box>
             <Divider />
-            <Box sx={{ maxHeight: 520, overflowY: "auto" }}>
-              {rows.map((row, idx) => (
-                <Box
-                  key={idx}
-                  px={3}
-                  py={1.5}
-                  sx={{
-                    borderBottom: "1px solid #f1f5f9",
-                    bgcolor:
-                      row.status === "success"       ? "#f0fdf4"
-                      : row.status === "error"       ? "#fff1f2"
-                      : row.status === "running"     ? "#eff6ff"
-                      : row.status === "missing_image" ? "#fffbeb"
-                      : "transparent",
-                    transition: "background 0.2s",
-                  }}
-                >
-                  <Box display="flex" alignItems="center" gap={2}>
-                    {/* Thumbnail — src from local File if available, else remote URL */}
-                    <Box
-                      component="img"
-                      src={
-                        imageMap.has(row.filename)
-                          ? URL.createObjectURL(imageMap.get(row.filename)!)
-                          : row.raw.Image
-                      }
-                      alt=""
-                      sx={{
-                        width: 44,
-                        height: 44,
-                        objectFit: "cover",
-                        borderRadius: 1,
-                        flexShrink: 0,
-                        bgcolor: "#e2e8f0",
-                        opacity: row.status === "missing_image" ? 0.4 : 1,
-                      }}
-                    />
-
-                    <Box flex={1} minWidth={0}>
-                      <Typography
-                        variant="body2"
-                        noWrap
-                        title={row.raw.Name}
-                        fontWeight={row.status === "running" ? 600 : 400}
-                        color={row.status === "missing_image" ? "text.disabled" : "text.primary"}
-                      >
-                        {row.raw.Name}
-                      </Typography>
-                      {row.status === "missing_image" && (
-                        <Typography variant="caption" color="warning.main">
-                          Image not found in folder — will be skipped
-                        </Typography>
-                      )}
-                      {row.status === "error" && (
-                        <Typography variant="caption" color="error">
-                          {row.error}
-                        </Typography>
-                      )}
-                    </Box>
-
-                    <Typography variant="body2" color="text.secondary" sx={{ flexShrink: 0 }}>
-                      Rs. {row.parsedPrice.toLocaleString("en-US")}
-                    </Typography>
-
-                    <Box sx={{ flexShrink: 0, width: 24, textAlign: "center" }}>
-                      {row.status === "success" && <CheckCircle fontSize="small" color="success" />}
-                      {row.status === "error"   && <ErrorIcon   fontSize="small" color="error"   />}
-                      {row.status === "missing_image" && <Warning fontSize="small" color="warning" />}
-                      {row.status === "running" && (
-                        <Box sx={{
-                          width: 16, height: 16,
-                          border: "2px solid #3b82f6",
-                          borderTop: "2px solid transparent",
-                          borderRadius: "50%",
-                          animation: "spin 0.8s linear infinite",
-                          mx: "auto",
-                          "@keyframes spin": { to: { transform: "rotate(360deg)" } },
-                        }} />
-                      )}
-                    </Box>
-                  </Box>
-
-                  {row.status === "running" && (
-                    <Box mt={1} pl={7}>
-                      <Typography variant="caption" color="text.secondary">
-                        {row.imageProgress < 100
-                          ? `Uploading to storage… ${row.imageProgress}%`
-                          : "Saving product…"}
-                      </Typography>
-                      <LinearProgress
-                        variant="determinate"
-                        value={row.imageProgress}
-                        sx={{ mt: 0.5, borderRadius: 1, height: 4 }}
-                      />
-                    </Box>
-                  )}
-                </Box>
-              ))}
-            </Box>
+            <VirtualRowList rows={rows} imageMap={imageMap} progressRefs={progressRefs} />
           </Paper>
         )}
       </Box>
