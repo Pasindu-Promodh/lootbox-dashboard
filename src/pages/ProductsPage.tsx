@@ -20,7 +20,11 @@ import StarIcon from "@mui/icons-material/Star";
 import InventoryIcon from "@mui/icons-material/Inventory";
 import LoyaltyIcon from "@mui/icons-material/Loyalty";
 import ContentCopyIcon from "@mui/icons-material/ContentCopy";
-import { DataGrid, type GridColDef, type GridRowSelectionModel } from "@mui/x-data-grid";
+import {
+  DataGrid,
+  type GridColDef,
+  type GridRowSelectionModel,
+} from "@mui/x-data-grid";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { getProducts, type Product } from "../services/products";
@@ -42,7 +46,10 @@ export default function ProductsPage() {
   const [deleting, setDeleting] = useState(false);
 
   // Multi-select & bulk delete state
-  const [selectionModel, setSelectionModel] = useState<GridRowSelectionModel>({ type: "include", ids: new Set() });
+  const [selectionModel, setSelectionModel] = useState<GridRowSelectionModel>({
+    type: "include",
+    ids: new Set(),
+  });
   const [bulkDeleteDialogOpen, setBulkDeleteDialogOpen] = useState(false);
   const [bulkDeleting, setBulkDeleting] = useState(false);
 
@@ -52,7 +59,7 @@ export default function ProductsPage() {
 
   const loadProducts = async () => {
     setLoading(true);
-    const data = await getProducts({ limit: 50 });
+    const data = await getProducts({ limit: 500 }); // ← was 50, bump to 500 or whatever covers your catalog
     setProducts(data);
     setLoading(false);
   };
@@ -62,7 +69,7 @@ export default function ProductsPage() {
       p.name.toLowerCase().includes(search.toLowerCase()) ||
       p.category.toLowerCase().includes(search.toLowerCase()) ||
       p.sub_category.toLowerCase().includes(search.toLowerCase()) ||
-      p.id.toLowerCase().includes(search.toLowerCase())
+      p.id.toLowerCase().includes(search.toLowerCase()),
   );
 
   const selectedIds: string[] =
@@ -105,7 +112,9 @@ export default function ProductsPage() {
 
   const confirmBulkDelete = async () => {
     setBulkDeleting(true);
-    const results = await Promise.all(selectedIds.map((id) => deleteProduct(id)));
+    const results = await Promise.all(
+      selectedIds.map((id) => deleteProduct(id)),
+    );
     setBulkDeleting(false);
 
     const failed = results.filter((r) => !r).length;
@@ -132,9 +141,19 @@ export default function ProductsPage() {
       renderCell: (params) => {
         const img = params.value?.[0]?.thumb || params.value?.[0]?.main;
         return (
-          <Box width={40} height={40} borderRadius={1} overflow="hidden" bgcolor="#e2e8f0">
+          <Box
+            width={40}
+            height={40}
+            borderRadius={1}
+            overflow="hidden"
+            bgcolor="#e2e8f0"
+          >
             {img && (
-              <img src={img} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+              <img
+                src={img}
+                alt=""
+                style={{ width: "100%", height: "100%", objectFit: "cover" }}
+              />
             )}
           </Box>
         );
@@ -172,7 +191,9 @@ export default function ProductsPage() {
       headerName: "Original",
       width: 80,
       renderCell: (params) => (
-        <Typography sx={{ textAlign: "right", flex: 1 }}>{params.value}</Typography>
+        <Typography sx={{ textAlign: "right", flex: 1 }}>
+          {params.value}
+        </Typography>
       ),
     },
     {
@@ -183,7 +204,13 @@ export default function ProductsPage() {
         <Box sx={{ flex: 1, justifyContent: "space-between", display: "flex" }}>
           {params.row.on_sale && (
             <Tooltip title="Pre-discount price">
-              <Typography sx={{ flex: 1, textAlign: "right", textDecoration: "line-through" }}>
+              <Typography
+                sx={{
+                  flex: 1,
+                  textAlign: "right",
+                  textDecoration: "line-through",
+                }}
+              >
                 {params.row.pre_discount_price}
               </Typography>
             </Tooltip>
@@ -211,7 +238,9 @@ export default function ProductsPage() {
       headerName: "Sold",
       width: 50,
       renderCell: (params) => (
-        <Typography sx={{ flex: 1, textAlign: "right" }}>{params.value}</Typography>
+        <Typography sx={{ flex: 1, textAlign: "right" }}>
+          {params.value}
+        </Typography>
       ),
     },
     {
@@ -221,19 +250,46 @@ export default function ProductsPage() {
       sortable: false,
       renderCell: (params) => (
         <Box display="flex" width="100%">
-          <Box sx={{ flex: 1, alignItems: "center", display: "flex", justifyContent: "center" }}>
+          <Box
+            sx={{
+              flex: 1,
+              alignItems: "center",
+              display: "flex",
+              justifyContent: "center",
+            }}
+          >
             {params.row.featured && (
-              <Tooltip title="Featured"><StarIcon color="warning" /></Tooltip>
+              <Tooltip title="Featured">
+                <StarIcon color="warning" />
+              </Tooltip>
             )}
           </Box>
-          <Box sx={{ flex: 1, alignItems: "center", display: "flex", justifyContent: "center" }}>
+          <Box
+            sx={{
+              flex: 1,
+              alignItems: "center",
+              display: "flex",
+              justifyContent: "center",
+            }}
+          >
             {params.row.in_stock && (
-              <Tooltip title="In stock"><InventoryIcon color="success" /></Tooltip>
+              <Tooltip title="In stock">
+                <InventoryIcon color="success" />
+              </Tooltip>
             )}
           </Box>
-          <Box sx={{ flex: 1, alignItems: "center", display: "flex", justifyContent: "center" }}>
+          <Box
+            sx={{
+              flex: 1,
+              alignItems: "center",
+              display: "flex",
+              justifyContent: "center",
+            }}
+          >
             {params.row.on_sale && (
-              <Tooltip title="On sale"><LoyaltyIcon color="error" /></Tooltip>
+              <Tooltip title="On sale">
+                <LoyaltyIcon color="error" />
+              </Tooltip>
             )}
           </Box>
         </Box>
@@ -246,14 +302,30 @@ export default function ProductsPage() {
       sortable: false,
       renderCell: (params) => (
         <Box display="flex" width="100%">
-          <Box sx={{ flex: 1, alignItems: "center", display: "flex", justifyContent: "center" }}>
+          <Box
+            sx={{
+              flex: 1,
+              alignItems: "center",
+              display: "flex",
+              justifyContent: "center",
+            }}
+          >
             <Tooltip title="Edit">
-              <IconButton onClick={() => navigate(`/products/${params.row.id}`)}>
+              <IconButton
+                onClick={() => navigate(`/products/${params.row.id}`)}
+              >
                 <EditIcon />
               </IconButton>
             </Tooltip>
           </Box>
-          <Box sx={{ flex: 1, alignItems: "center", display: "flex", justifyContent: "center" }}>
+          <Box
+            sx={{
+              flex: 1,
+              alignItems: "center",
+              display: "flex",
+              justifyContent: "center",
+            }}
+          >
             <Tooltip title="Delete">
               <IconButton onClick={() => handleDeleteClick(params.row)}>
                 <DeleteIcon color="error" />
@@ -290,7 +362,10 @@ export default function ProductsPage() {
           <Button variant="outlined" onClick={() => navigate("/products/new")}>
             Add Product
           </Button>
-          <Button variant="outlined" onClick={() => navigate("/products/bulk-import")}>
+          <Button
+            variant="outlined"
+            onClick={() => navigate("/products/bulk-import")}
+          >
             Add Bulk
           </Button>
           <Button variant="outlined" onClick={loadProducts}>
@@ -334,7 +409,9 @@ export default function ProductsPage() {
               <Button
                 variant="outlined"
                 size="small"
-                onClick={() => setSelectionModel({ type: "include", ids: new Set() })}
+                onClick={() =>
+                  setSelectionModel({ type: "include", ids: new Set() })
+                }
               >
                 Clear
               </Button>
@@ -343,13 +420,13 @@ export default function ProductsPage() {
         </Box>
 
         {/* Data Grid */}
-        <Box height={600}>
+        <Box height={700}>
           <DataGrid
             rows={filtered}
             columns={columns}
             getRowId={(row) => row.id}
             loading={loading}
-            pageSizeOptions={[10, 25, 50]}
+            pageSizeOptions={[10, 25, 50, 100]}
             initialState={{
               pagination: { paginationModel: { pageSize: 10, page: 0 } },
             }}
@@ -357,7 +434,9 @@ export default function ProductsPage() {
             checkboxSelection
             disableRowSelectionOnClick
             rowSelectionModel={selectionModel}
-            onRowSelectionModelChange={(newModel) => setSelectionModel(newModel)}
+            onRowSelectionModelChange={(newModel) =>
+              setSelectionModel(newModel)
+            }
             // ─────────────────────────────────────────────────
             sx={{
               backgroundColor: "#fff",
@@ -381,11 +460,14 @@ export default function ProductsPage() {
         <DialogContent>
           <DialogContentText>
             Are you sure you want to delete{" "}
-            <strong>{productToDelete?.name}</strong>? This action cannot be undone.
+            <strong>{productToDelete?.name}</strong>? This action cannot be
+            undone.
           </DialogContentText>
         </DialogContent>
         <DialogActions>
-          <Button onClick={cancelDelete} disabled={deleting}>Cancel</Button>
+          <Button onClick={cancelDelete} disabled={deleting}>
+            Cancel
+          </Button>
           <Button
             color="error"
             onClick={confirmDelete}
@@ -403,12 +485,16 @@ export default function ProductsPage() {
         <DialogContent>
           <DialogContentText>
             Are you sure you want to delete{" "}
-            <strong>{selectedCount} product{selectedCount !== 1 ? "s" : ""}</strong>?
-            This action cannot be undone.
+            <strong>
+              {selectedCount} product{selectedCount !== 1 ? "s" : ""}
+            </strong>
+            ? This action cannot be undone.
           </DialogContentText>
         </DialogContent>
         <DialogActions>
-          <Button onClick={cancelBulkDelete} disabled={bulkDeleting}>Cancel</Button>
+          <Button onClick={cancelBulkDelete} disabled={bulkDeleting}>
+            Cancel
+          </Button>
           <Button
             color="error"
             onClick={confirmBulkDelete}
