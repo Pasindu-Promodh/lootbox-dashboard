@@ -53,35 +53,62 @@ export type Product = {
    Fetch Products
 ========================= */
 
-export async function getProducts({
-  limit = 12,
-  offset = 0,
-  featured,
-  orderBy = { column: "added_date", ascending: false },
-}: {
-  limit?: number;
-  offset?: number;
-  featured?: boolean;
-  orderBy?: { column: string; ascending?: boolean };
-} = {}): Promise<Product[]> {
-  let query = supabase
-    .from("products")
-    .select("*")
-    .order(orderBy.column, { ascending: orderBy.ascending ?? false })
-    .range(offset, offset + limit - 1);
+// export async function getProducts({
+//   limit = 12,
+//   offset = 0,
+//   featured,
+//   orderBy = { column: "added_date", ascending: false },
+// }: {
+//   limit?: number;
+//   offset?: number;
+//   featured?: boolean;
+//   orderBy?: { column: string; ascending?: boolean };
+// } = {}): Promise<Product[]> {
+//   let query = supabase
+//     .from("products")
+//     .select("*")
+//     .order(orderBy.column, { ascending: orderBy.ascending ?? false })
+//     .range(offset, offset + limit - 1);
 
-  if (featured !== undefined) {
-    query = query.eq("featured", featured);
+//   if (featured !== undefined) {
+//     query = query.eq("featured", featured);
+//   }
+
+//   const { data, error } = await query;
+
+//   if (error) {
+//     console.error("Error fetching products:", error);
+//     return [];
+//   }
+
+//   return (data ?? []);
+// }
+
+// services/products.ts  — add this helper
+export async function getAllProducts(): Promise<Product[]> {
+  const PAGE_SIZE = 1000;
+  let all: Product[] = [];
+  let from = 0;
+
+  while (true) {
+    const { data, error } = await supabase
+      .from("products")
+      .select("*")
+      .order("added_date", { ascending: false })
+      .range(from, from + PAGE_SIZE - 1);
+
+    if (error) {
+      console.error("Error fetching products:", error);
+      break;
+    }
+
+    all = all.concat(data ?? []);
+
+    if (!data || data.length < PAGE_SIZE) break; // last page
+    from += PAGE_SIZE;
   }
 
-  const { data, error } = await query;
-
-  if (error) {
-    console.error("Error fetching products:", error);
-    return [];
-  }
-
-  return (data ?? []);
+  return all;
 }
 
 /* =========================

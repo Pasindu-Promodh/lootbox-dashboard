@@ -27,7 +27,10 @@ import {
 } from "@mui/x-data-grid";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { getProducts, type Product } from "../services/products";
+import {
+  getAllProducts,
+  type Product,
+} from "../services/products";
 import { deleteProduct } from "../services/productsCrud";
 
 const calcDiscountFromPrices = (pre: number, price: number) =>
@@ -59,7 +62,8 @@ export default function ProductsPage() {
 
   const loadProducts = async () => {
     setLoading(true);
-    const data = await getProducts({ limit: 10000 }); // ← was 50, bump to 500 or whatever covers your catalog
+    // const data = await getProducts({ limit: 10000 }); // ← was 50, bump to 500 or whatever covers your catalog
+    const data = await getAllProducts();
     setProducts(data);
     setLoading(false);
   };
