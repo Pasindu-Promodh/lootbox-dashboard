@@ -92,6 +92,7 @@ import Finance from "./pages/Finance";
 import { CategoriesProvider } from "./context/CategoriesContext";
 import type { JSX } from "react";
 import BulkImportPage from "./pages/Bulkimportpage";
+import UsersPage from "./pages/UsersPage";
 
 /* ---------- Protected Route ---------- */
 const ProtectedRoute = ({ children }: { children: JSX.Element }) => {
@@ -173,7 +174,24 @@ export default function App() {
                 </ProtectedRoute>
               }
             />
-            <Route path="/products/bulk-import" element={<BulkImportPage />} />
+            <Route
+              path="/products/bulk-import"
+              element={
+                <ProtectedRoute>
+                  <BulkImportPage />
+                </ProtectedRoute>
+              }
+            />
+
+            {/* Users */}
+            <Route
+              path="/users"
+              element={
+                <ProtectedRoute>
+                  <UsersPage />
+                </ProtectedRoute>
+              }
+            />
 
             {/* Orders */}
             <Route
