@@ -63,14 +63,13 @@ export async function removeAdminUser(userId: string) {
  */
 export async function inviteAdminUser(email: string, role: string) {
   const { data, error } = await supabase.functions.invoke("invite-admin", {
-  body: { email, role },
-});
+    body: { email, role },
+  });
 
-if (error) {
-  // error.context is the Response object — read its body for the real message
-  const details = await error.context?.json?.().catch(() => null);
-  console.error("invite-admin failed:", details ?? error);
-}
+  if (error) {
+    console.error("Invite admin failed:", error);
+    throw error;
+  }
 
   return data as { user_id: string; email: string };
 }

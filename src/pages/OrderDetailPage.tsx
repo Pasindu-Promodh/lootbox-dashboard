@@ -218,6 +218,7 @@ import { supabase } from "../lib/supabase";
 import type { Order, OrderItem, OrderStatus } from "../types/order";
 import { Link } from "react-router-dom";
 import type { ProductImage } from "../services/products";
+import { useAuth } from "../context/AuthContext";
 
 interface OrderItemWithProduct extends OrderItem {
   product?: { id: string; name: string; images: ProductImage[] };
@@ -285,6 +286,7 @@ export default function OrderDetailPage({
   const [order, setOrder] = useState<Order | null>(null);
   const [items, setItems] = useState<OrderItemWithProduct[]>([]);
   const [loading, setLoading] = useState(true);
+  const { canManage } = useAuth();
 
   const [statusDialogOpen, setStatusDialogOpen] = useState(false);
   const [nextStatus, setNextStatus] = useState<OrderStatus | null>(null);
@@ -706,59 +708,52 @@ export default function OrderDetailPage({
                 sx={{ mb: 2 }}
               />
               <Stack spacing={1}>
-                {/* {getNextStatuses(order.status as OrderStatus).map((status) => (
-                  <Button
-                    key={status}
-                    size="small"
-                    variant="outlined"
-                    onClick={() => {
-                      setNextStatus(status);
-                      setNote(DEFAULT_STATUS_NOTES[status] || "");
-                      setStatusDialogOpen(true);
-                    }}
-                  >
-                    Mark as {status}
-                  </Button>
-                ))} */}
-
                 {/* ORDER STATUS ACTIONS */}
-                {getNextStatuses(order.status as OrderStatus).map((status) => (
-                  <Button
-                    key={status}
-                    size="small"
-                    variant="outlined"
-                    onClick={() => {
-                      setNextStatus(status);
-                      setNote(DEFAULT_STATUS_NOTES[status] || "");
-                      setStatusDialogOpen(true);
-                    }}
-                  >
-                    Mark as {status}
-                  </Button>
-                ))}
+                {canManage ? (
+                  <>
+                    {getNextStatuses(order.status as OrderStatus).map((status) => (
+                      <Button
+                        key={status}
+                        size="small"
+                        variant="outlined"
+                        onClick={() => {
+                          setNextStatus(status);
+                          setNote(DEFAULT_STATUS_NOTES[status] || "");
+                          setStatusDialogOpen(true);
+                        }}
+                      >
+                        Mark as {status}
+                      </Button>
+                    ))}
 
-                {/* PAYMENT STATUS ACTIONS */}
-                {order.status === "delivered" &&
-                  order.payment_status === "pending" && (
-                    <Button
-                      size="small"
-                      color="warning"
-                      variant="contained"
-                      onClick={() => updatePaymentStatus("submitted")}
-                    >
-                      Mark payment as submitted
-                    </Button>
-                  )}
+                    {/* PAYMENT STATUS ACTIONS */}
+                    {order.status === "delivered" &&
+                      order.payment_status === "pending" && (
+                        <Button
+                          size="small"
+                          color="warning"
+                          variant="contained"
+                          onClick={() => updatePaymentStatus("submitted")}
+                        >
+                          Mark payment as submitted
+                        </Button>
+                      )}
 
-                {order.payment_status === "submitted" && (
-                  <Button
-                    size="small"
-                    color="success"
-                    variant="contained"
-                    onClick={() => updatePaymentStatus("received")}
-                  >
-                    Mark payment as received
-                  </Button>
+                    {order.payment_status === "submitted" && (
+                      <Button
+                        size="small"
+                        color="success"
+                        variant="contained"
+                        onClick={() => updatePaymentStatus("received")}
+                      >
+                        Mark payment as received
+                      </Button>
+                    )}
+                  </>
+                ) : (
+                  <Typography variant="body2" color="text.secondary">
+                    Read-only access — you can't change order or payment status.
+                  </Typography>
                 )}
               </Stack>
             </Paper>

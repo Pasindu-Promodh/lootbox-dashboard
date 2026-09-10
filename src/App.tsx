@@ -105,6 +105,19 @@ const ProtectedRoute = ({ children }: { children: JSX.Element }) => {
   return children;
 };
 
+/* ---------- Requires admin/super_admin (blocks viewers) ---------- */
+const RequireManager = ({ children }: { children: JSX.Element }) => {
+  const { canManage, loading } = useAuth();
+
+  if (loading) return null;
+
+  // Viewers have read-only access — send them back to the list view
+  // instead of a create/edit/bulk-import form they can't submit anyway.
+  if (!canManage) return <Navigate to="/products" replace />;
+
+  return children;
+};
+
 /* ---------- Public Route (Login) ---------- */
 const PublicRoute = ({ children }: { children: JSX.Element }) => {
   const { user, loading } = useAuth();
@@ -162,7 +175,9 @@ export default function App() {
               path="/products/new"
               element={
                 <ProtectedRoute>
-                  <ProductFormPage />
+                  <RequireManager>
+                    <ProductFormPage />
+                  </RequireManager>
                 </ProtectedRoute>
               }
             />
@@ -170,7 +185,9 @@ export default function App() {
               path="/products/:id"
               element={
                 <ProtectedRoute>
-                  <ProductFormPage />
+                  <RequireManager>
+                    <ProductFormPage />
+                  </RequireManager>
                 </ProtectedRoute>
               }
             />
@@ -178,7 +195,9 @@ export default function App() {
               path="/products/bulk-import"
               element={
                 <ProtectedRoute>
-                  <BulkImportPage />
+                  <RequireManager>
+                    <BulkImportPage />
+                  </RequireManager>
                 </ProtectedRoute>
               }
             />

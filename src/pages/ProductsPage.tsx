@@ -13,31 +13,50 @@ import {
   DialogTitle,
   CircularProgress,
   Chip,
+  Menu,
+  MenuItem,
+  ListItemIcon,
+  ListItemText,
+  Divider,
 } from "@mui/material";
 import EditIcon from "@mui/icons-material/Edit";
 import DeleteIcon from "@mui/icons-material/Delete";
 import StarIcon from "@mui/icons-material/Star";
+import StarBorderIcon from "@mui/icons-material/StarBorder";
 import InventoryIcon from "@mui/icons-material/Inventory";
+import Inventory2Icon from "@mui/icons-material/Inventory2";
 import LoyaltyIcon from "@mui/icons-material/Loyalty";
 import ContentCopyIcon from "@mui/icons-material/ContentCopy";
+import ChecklistIcon from "@mui/icons-material/Checklist";
 import {
   DataGrid,
   type GridColDef,
   type GridRowSelectionModel,
 } from "@mui/x-data-grid";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useAuth } from "../context/AuthContext";
 import {
   getAllProducts,
   type Product,
 } from "../services/products";
-import { deleteProduct } from "../services/productsCrud";
+import { deleteProduct, bulkUpdateProducts } from "../services/productsCrud";
 
 const calcDiscountFromPrices = (pre: number, price: number) =>
   pre ? Math.round(((pre - price) / pre) * 100) : 0;
 
+type StockFilter = "in_stock" | "out_of_stock" | "on_sale" | "featured";
+
+const STOCK_FILTERS: { key: StockFilter; label: string }[] = [
+  { key: "in_stock", label: "In Stock" },
+  { key: "out_of_stock", label: "Out of Stock" },
+  { key: "on_sale", label: "On Sale" },
+  { key: "featured", label: "Featured" },
+];
+
 export default function ProductsPage() {
   const navigate = useNavigate();
+  const { canManage } = useAuth();
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -56,6 +75,13 @@ export default function ProductsPage() {
   const [bulkDeleteDialogOpen, setBulkDeleteDialogOpen] = useState(false);
   const [bulkDeleting, setBulkDeleting] = useState(false);
 
+  // Stock/sale/featured filter chips — multiple can be active at once (AND'd together)
+  const [activeFilters, setActiveFilters] = useState<Set<StockFilter>>(new Set());
+
+  // Bulk flag-update menu ("mark selected as...")
+  const [bulkActionAnchor, setBulkActionAnchor] = useState<null | HTMLElement>(null);
+  const [bulkUpdating, setBulkUpdating] = useState(false);
+
   useEffect(() => {
     loadProducts();
   }, []);
@@ -68,13 +94,34 @@ export default function ProductsPage() {
     setLoading(false);
   };
 
-  const filtered = products.filter(
-    (p) =>
-      p.name.toLowerCase().includes(search.toLowerCase()) ||
-      p.category.toLowerCase().includes(search.toLowerCase()) ||
-      p.sub_category.toLowerCase().includes(search.toLowerCase()) ||
-      p.id.toLowerCase().includes(search.toLowerCase()),
-  );
+  const toggleFilter = (key: StockFilter) => {
+    setActiveFilters((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
+
+  const filtered = useMemo(() => {
+    const q = search.toLowerCase();
+    return products.filter((p) => {
+      const matchesSearch =
+        p.name.toLowerCase().includes(q) ||
+        p.category.toLowerCase().includes(q) ||
+        p.sub_category.toLowerCase().includes(q) ||
+        p.id.toLowerCase().includes(q);
+
+      if (!matchesSearch) return false;
+
+      if (activeFilters.has("in_stock") && !p.in_stock) return false;
+      if (activeFilters.has("out_of_stock") && p.in_stock) return false;
+      if (activeFilters.has("on_sale") && !p.on_sale) return false;
+      if (activeFilters.has("featured") && !p.featured) return false;
+
+      return true;
+    });
+  }, [products, search, activeFilters]);
 
   const selectedIds: string[] =
     selectionModel.type === "include"
@@ -133,6 +180,22 @@ export default function ProductsPage() {
 
   const cancelBulkDelete = () => {
     setBulkDeleteDialogOpen(false);
+  };
+
+  // ── Bulk flag update (in stock / out of stock / sale / featured) ───
+  const handleBulkFlagUpdate = async (
+    updates: Partial<Pick<Product, "in_stock" | "on_sale" | "featured">>
+  ) => {
+    setBulkActionAnchor(null);
+    if (selectedIds.length === 0) return;
+    setBulkUpdating(true);
+    const success = await bulkUpdateProducts(selectedIds, updates);
+    setBulkUpdating(false);
+    if (!success) {
+      alert("Failed to update some or all selected products.");
+    }
+    setSelectionModel({ type: "include", ids: new Set() });
+    loadProducts();
   };
 
   const selectedCount = selectedIds.length;
@@ -314,12 +377,15 @@ export default function ProductsPage() {
               justifyContent: "center",
             }}
           >
-            <Tooltip title="Edit">
-              <IconButton
-                onClick={() => navigate(`/products/${params.row.id}`)}
-              >
-                <EditIcon />
-              </IconButton>
+            <Tooltip title={canManage ? "Edit" : "Read-only access"}>
+              <span>
+                <IconButton
+                  disabled={!canManage}
+                  onClick={() => navigate(`/products/${params.row.id}`)}
+                >
+                  <EditIcon />
+                </IconButton>
+              </span>
             </Tooltip>
           </Box>
           <Box
@@ -330,10 +396,12 @@ export default function ProductsPage() {
               justifyContent: "center",
             }}
           >
-            <Tooltip title="Delete">
-              <IconButton onClick={() => handleDeleteClick(params.row)}>
-                <DeleteIcon color="error" />
-              </IconButton>
+            <Tooltip title={canManage ? "Delete" : "Read-only access"}>
+              <span>
+                <IconButton disabled={!canManage} onClick={() => handleDeleteClick(params.row)}>
+                  <DeleteIcon color={canManage ? "error" : "disabled"} />
+                </IconButton>
+              </span>
             </Tooltip>
           </Box>
         </Box>
@@ -363,15 +431,19 @@ export default function ProductsPage() {
         </Box>
 
         <Box display="flex" alignItems="center" gap={2}>
-          <Button variant="outlined" onClick={() => navigate("/products/new")}>
-            Add Product
-          </Button>
-          <Button
-            variant="outlined"
-            onClick={() => navigate("/products/bulk-import")}
-          >
-            Add Bulk
-          </Button>
+          {canManage && (
+            <>
+              <Button variant="outlined" onClick={() => navigate("/products/new")}>
+                Add Product
+              </Button>
+              <Button
+                variant="outlined"
+                onClick={() => navigate("/products/bulk-import")}
+              >
+                Add Bulk
+              </Button>
+            </>
+          )}
           <Button variant="outlined" onClick={loadProducts}>
             Refresh
           </Button>
@@ -384,7 +456,7 @@ export default function ProductsPage() {
       {/* Content */}
       <Box px={{ xs: 2, sm: 4 }} py={4}>
         {/* Search + Bulk action bar */}
-        <Box mb={3} display="flex" alignItems="center" gap={2} flexWrap="wrap">
+        <Box mb={2} display="flex" alignItems="center" gap={2} flexWrap="wrap">
           <TextField
             size="small"
             placeholder="Search products…"
@@ -393,7 +465,7 @@ export default function ProductsPage() {
             sx={{ maxWidth: 360, flex: 1 }}
           />
 
-          {/* Bulk delete button — only visible when rows are selected */}
+          {/* Bulk action bar — only visible when rows are selected */}
           {selectedCount > 0 && (
             <Box display="flex" alignItems="center" gap={1}>
               <Chip
@@ -402,6 +474,14 @@ export default function ProductsPage() {
                 color="primary"
                 variant="outlined"
               />
+              <Button
+                variant="outlined"
+                startIcon={<ChecklistIcon />}
+                disabled={bulkUpdating}
+                onClick={(e) => setBulkActionAnchor(e.currentTarget)}
+              >
+                {bulkUpdating ? "Updating…" : "Set Status"}
+              </Button>
               <Button
                 variant="contained"
                 color="error"
@@ -423,6 +503,66 @@ export default function ProductsPage() {
           )}
         </Box>
 
+        {/* Filter chips */}
+        <Box mb={3} display="flex" alignItems="center" gap={1} flexWrap="wrap">
+          <Typography variant="body2" color="text.secondary" mr={0.5}>
+            Filter:
+          </Typography>
+          {STOCK_FILTERS.map(({ key, label }) => {
+            const active = activeFilters.has(key);
+            return (
+              <Chip
+                key={key}
+                label={label}
+                size="small"
+                clickable
+                onClick={() => toggleFilter(key)}
+                color={active ? "primary" : "default"}
+                variant={active ? "filled" : "outlined"}
+              />
+            );
+          })}
+          {activeFilters.size > 0 && (
+            <Button size="small" onClick={() => setActiveFilters(new Set())}>
+              Clear filters
+            </Button>
+          )}
+        </Box>
+
+        {/* Bulk "Set Status" menu */}
+        <Menu
+          anchorEl={bulkActionAnchor}
+          open={Boolean(bulkActionAnchor)}
+          onClose={() => setBulkActionAnchor(null)}
+        >
+          <MenuItem onClick={() => handleBulkFlagUpdate({ in_stock: true })}>
+            <ListItemIcon><InventoryIcon fontSize="small" color="success" /></ListItemIcon>
+            <ListItemText>Mark In Stock</ListItemText>
+          </MenuItem>
+          <MenuItem onClick={() => handleBulkFlagUpdate({ in_stock: false })}>
+            <ListItemIcon><Inventory2Icon fontSize="small" /></ListItemIcon>
+            <ListItemText>Mark Out of Stock</ListItemText>
+          </MenuItem>
+          <Divider />
+          <MenuItem onClick={() => handleBulkFlagUpdate({ on_sale: true })}>
+            <ListItemIcon><LoyaltyIcon fontSize="small" color="error" /></ListItemIcon>
+            <ListItemText>Mark On Sale</ListItemText>
+          </MenuItem>
+          <MenuItem onClick={() => handleBulkFlagUpdate({ on_sale: false })}>
+            <ListItemIcon><LoyaltyIcon fontSize="small" /></ListItemIcon>
+            <ListItemText>Remove On Sale</ListItemText>
+          </MenuItem>
+          <Divider />
+          <MenuItem onClick={() => handleBulkFlagUpdate({ featured: true })}>
+            <ListItemIcon><StarIcon fontSize="small" color="warning" /></ListItemIcon>
+            <ListItemText>Mark Featured</ListItemText>
+          </MenuItem>
+          <MenuItem onClick={() => handleBulkFlagUpdate({ featured: false })}>
+            <ListItemIcon><StarBorderIcon fontSize="small" /></ListItemIcon>
+            <ListItemText>Remove Featured</ListItemText>
+          </MenuItem>
+        </Menu>
+
         {/* Data Grid */}
         <Box height={700}>
           <DataGrid
@@ -435,7 +575,7 @@ export default function ProductsPage() {
               pagination: { paginationModel: { pageSize: 10, page: 0 } },
             }}
             // ── Multi-select ──────────────────────────────────
-            checkboxSelection
+            checkboxSelection={canManage}
             disableRowSelectionOnClick
             rowSelectionModel={selectionModel}
             onRowSelectionModelChange={(newModel) =>

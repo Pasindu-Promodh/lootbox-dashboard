@@ -54,6 +54,26 @@ export async function updateProduct(
 }
 
 /**
+ * Bulk-update flags (in_stock / on_sale / featured) for a set of products at
+ * once — used by the Products page's bulk action bar.
+ */
+export async function bulkUpdateProducts(
+  ids: string[],
+  updates: Partial<Pick<Product, "in_stock" | "on_sale" | "featured">>
+) {
+  if (ids.length === 0) return true;
+
+  const { error } = await supabase.from("products").update(updates).in("id", ids);
+
+  if (error) {
+    console.error("Bulk update products failed:", error);
+    return false;
+  }
+
+  return true;
+}
+
+/**
  * Delete a product
  */
 // export async function deleteProduct(id: string) {

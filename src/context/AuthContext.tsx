@@ -77,25 +77,42 @@ import type { User } from "@supabase/supabase-js";
 
 type AuthContextType = {
   user: User | null;
+  /** Role from admin_users, e.g. "super_admin" | "admin" | "viewer" */
+  role: string | null;
+  isSuperAdmin: boolean;
+  /** true for admin/super_admin — false for viewer (read-only) or logged out */
+  canManage: boolean;
   loading: boolean;
 };
 
-const AuthContext = createContext<AuthContextType>({ user: null, loading: true });
+const AuthContext = createContext<AuthContextType>({
+  user: null,
+  role: null,
+  isSuperAdmin: false,
+  canManage: false,
+  loading: true,
+});
 
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
+  const [role, setRole] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   const checkAdminAccess = async (user: User) => {
     try {
       const { data, error } = await supabase
         .from("admin_users")
-        .select("user_id")
+        .select("user_id, role")
         .eq("user_id", user.id)
         .maybeSingle();
 
-      if (!data || error) setUser(null);
-      else setUser(user);
+      if (!data || error) {
+        setUser(null);
+        setRole(null);
+      } else {
+        setUser(user);
+        setRole(data.role ?? null);
+      }
     } finally {
       setLoading(false);
     }
@@ -112,13 +129,28 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       if (session?.user) checkAdminAccess(session.user);
-      else setUser(null);
+      else {
+        setUser(null);
+        setRole(null);
+      }
     });
 
     return () => subscription.unsubscribe();
   }, []);
 
-  return <AuthContext.Provider value={{ user, loading }}>{children}</AuthContext.Provider>;
+  return (
+    <AuthContext.Provider
+      value={{
+        user,
+        role,
+        isSuperAdmin: role === "super_admin",
+        canManage: role === "super_admin" || role === "admin",
+        loading,
+      }}
+    >
+      {children}
+    </AuthContext.Provider>
+  );
 };
 
 export const useAuth = () => useContext(AuthContext);

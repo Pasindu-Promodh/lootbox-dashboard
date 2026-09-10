@@ -33,20 +33,21 @@ import {
   inviteAdminUser,
 } from "../services/adminUsers";
 import { fetchCustomers } from "../services/customers";
-import { ADMIN_ROLES, type AdminUser } from "../types/adminUser";
+import { ADMIN_ROLES, isSuperAdmin, type AdminUser } from "../types/adminUser";
 import type { Customer } from "../types/customer";
 import OrderDetailPage from "./OrderDetailPage";
 
-const ROLE_COLORS: Record<string, "default" | "primary" | "secondary" | "warning"> = {
+const ROLE_COLORS: Record<string, "default" | "primary" | "error"> = {
+  super_admin: "error",
   admin: "primary",
-  staff: "secondary",
   viewer: "default",
 };
 
 export default function UsersPage() {
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, role } = useAuth();
   const [tab, setTab] = useState(0);
+  const currentUserIsSuperAdmin = isSuperAdmin(role);
 
   return (
     <Box width="100%" minHeight="100vh" bgcolor="#f8fafc">
@@ -65,7 +66,7 @@ export default function UsersPage() {
             Users
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            Manage dashboard admins, staff & customers
+            Manage dashboard admins & customers
           </Typography>
         </Box>
 
@@ -76,22 +77,33 @@ export default function UsersPage() {
 
       <Box px={{ xs: 2, sm: 4 }} pt={2} bgcolor="#fff" boxShadow="0 1px 8px rgba(0,0,0,0.05)">
         <Tabs value={tab} onChange={(_, v) => setTab(v)}>
-          <Tab label="Admins & Staff" />
+          <Tab label="Admins" />
           <Tab label="Customers" />
         </Tabs>
       </Box>
 
       <Box px={{ xs: 2, sm: 4 }} py={4}>
-        {tab === 0 && <AdminsSection currentUserId={user?.id ?? null} />}
+        {tab === 0 && (
+          <AdminsSection
+            currentUserId={user?.id ?? null}
+            isSuperAdmin={currentUserIsSuperAdmin}
+          />
+        )}
         {tab === 1 && <CustomersSection />}
       </Box>
     </Box>
   );
 }
 
-/* ==================== ADMINS & STAFF ==================== */
+/* ==================== ADMINS ==================== */
 
-function AdminsSection({ currentUserId }: { currentUserId: string | null }) {
+function AdminsSection({
+  currentUserId,
+  isSuperAdmin,
+}: {
+  currentUserId: string | null;
+  isSuperAdmin: boolean;
+}) {
   const [admins, setAdmins] = useState<AdminUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -132,6 +144,7 @@ function AdminsSection({ currentUserId }: { currentUserId: string | null }) {
   }, [admins, search]);
 
   const handleRoleChange = async (row: AdminUser, e: SelectChangeEvent) => {
+    if (!isSuperAdmin) return;
     const newRole = e.target.value;
     const prev = row.role;
 
@@ -152,7 +165,7 @@ function AdminsSection({ currentUserId }: { currentUserId: string | null }) {
   };
 
   const confirmRemove = async () => {
-    if (!removeTarget) return;
+    if (!removeTarget || !isSuperAdmin) return;
     setRemoving(true);
     try {
       await removeAdminUser(removeTarget.user_id);
@@ -194,28 +207,39 @@ function AdminsSection({ currentUserId }: { currentUserId: string | null }) {
     {
       field: "role",
       headerName: "Role",
-      width: 160,
+      width: 170,
       sortable: false,
-      renderCell: (params) => (
-        <Select
-          size="small"
-          value={ADMIN_ROLES.includes(params.value) ? params.value : "admin"}
-          onChange={(e) => handleRoleChange(params.row as AdminUser, e)}
-          disabled={params.row.user_id === currentUserId}
-          sx={{ minWidth: 120 }}
-        >
-          {ADMIN_ROLES.map((role) => (
-            <MenuItem key={role} value={role}>
-              <Chip
-                size="small"
-                label={role}
-                color={ROLE_COLORS[role] ?? "default"}
-                sx={{ pointerEvents: "none" }}
-              />
-            </MenuItem>
-          ))}
-        </Select>
-      ),
+      renderCell: (params) => {
+        const disabled = params.row.user_id === currentUserId || !isSuperAdmin;
+        const select = (
+          <Select
+            size="small"
+            value={ADMIN_ROLES.includes(params.value) ? params.value : "admin"}
+            onChange={(e) => handleRoleChange(params.row as AdminUser, e)}
+            disabled={disabled}
+            sx={{ minWidth: 130 }}
+          >
+            {ADMIN_ROLES.map((role) => (
+              <MenuItem key={role} value={role}>
+                <Chip
+                  size="small"
+                  label={role}
+                  color={ROLE_COLORS[role] ?? "default"}
+                  sx={{ pointerEvents: "none" }}
+                />
+              </MenuItem>
+            ))}
+          </Select>
+        );
+        if (!isSuperAdmin) {
+          return (
+            <Tooltip title="Only super admins can change roles">
+              <span>{select}</span>
+            </Tooltip>
+          );
+        }
+        return select;
+      },
     },
     {
       field: "created_at",
@@ -234,13 +258,19 @@ function AdminsSection({ currentUserId }: { currentUserId: string | null }) {
       sortable: false,
       renderCell: (params) => {
         const isSelf = params.row.user_id === currentUserId;
+        const disabled = isSelf || !isSuperAdmin;
+        const title = isSelf
+          ? "You can't remove your own account"
+          : !isSuperAdmin
+            ? "Only super admins can remove access"
+            : "Remove access";
         return (
-          <Tooltip title={isSelf ? "You can't remove your own account" : "Remove access"}>
+          <Tooltip title={title}>
             <span>
               <IconButton
                 size="small"
                 color="error"
-                disabled={isSelf}
+                disabled={disabled}
                 onClick={() => setRemoveTarget(params.row as AdminUser)}
               >
                 <DeleteIcon fontSize="small" />
@@ -275,13 +305,18 @@ function AdminsSection({ currentUserId }: { currentUserId: string | null }) {
           <Button variant="outlined" onClick={load}>
             Refresh
           </Button>
-          <Button
-            variant="contained"
-            startIcon={<PersonAddIcon />}
-            onClick={() => setInviteOpen(true)}
-          >
-            Invite Admin
-          </Button>
+          <Tooltip title={isSuperAdmin ? "" : "Only super admins can invite admins"}>
+            <span>
+              <Button
+                variant="contained"
+                startIcon={<PersonAddIcon />}
+                disabled={!isSuperAdmin}
+                onClick={() => setInviteOpen(true)}
+              >
+                Invite Admin
+              </Button>
+            </span>
+          </Tooltip>
         </Box>
       </Box>
 
@@ -313,8 +348,10 @@ function AdminsSection({ currentUserId }: { currentUserId: string | null }) {
         <DialogTitle>Invite Admin</DialogTitle>
         <DialogContent>
           <DialogContentText mb={2}>
-            Sends an email invite. The recipient sets their own password and is
-            added to <code>admin_users</code> automatically once they accept.
+            If they've already signed in with Google, they're added straight
+            away. Otherwise a placeholder account is created and linked
+            automatically the first time they sign in with Google using this
+            email.
           </DialogContentText>
           <TextField
             autoFocus
@@ -390,6 +427,7 @@ function CustomersSection() {
   const [search, setSearch] = useState("");
   const [ordersDialogFor, setOrdersDialogFor] = useState<Customer | null>(null);
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
+  const [snackbar, setSnackbar] = useState<string | null>(null);
 
   useEffect(() => {
     load();
@@ -400,6 +438,8 @@ function CustomersSection() {
     try {
       const data = await fetchCustomers();
       setCustomers(data);
+    } catch {
+      setSnackbar("Failed to load customers");
     } finally {
       setLoading(false);
     }
@@ -410,15 +450,30 @@ function CustomersSection() {
     return customers.filter(
       (c) =>
         c.customer_name?.toLowerCase().includes(q) ||
+        c.email?.toLowerCase().includes(q) ||
         c.phone1?.includes(search) ||
         c.district?.toLowerCase().includes(q)
     );
   }, [customers, search]);
 
   const columns: GridColDef[] = [
-    { field: "customer_name", headerName: "Customer", flex: 1, minWidth: 180 },
-    { field: "phone1", headerName: "Phone", width: 140 },
-    { field: "district", headerName: "District", width: 130 },
+    {
+      field: "customer_name",
+      headerName: "Customer",
+      flex: 1,
+      minWidth: 180,
+      renderCell: (params) => (
+        <Box display="flex" alignItems="center" gap={1}>
+          <Typography noWrap>{params.value}</Typography>
+          {params.row.is_guest && (
+            <Chip label="Guest" size="small" variant="outlined" />
+          )}
+        </Box>
+      ),
+    },
+    { field: "email", headerName: "Email", width: 200, valueGetter: (v) => v || "—" },
+    { field: "phone1", headerName: "Phone", width: 140, valueGetter: (v) => v || "—" },
+    { field: "district", headerName: "District", width: 130, valueGetter: (v) => v || "—" },
     { field: "orders_count", headerName: "Orders", width: 90, type: "number" },
     {
       field: "total_spent",
@@ -435,10 +490,12 @@ function CustomersSection() {
       headerName: "Last Order",
       width: 160,
       renderCell: (params) =>
-        new Date(params.value).toLocaleString(undefined, {
-          timeStyle: "short",
-          dateStyle: "short",
-        }),
+        params.value
+          ? new Date(params.value).toLocaleString(undefined, {
+              timeStyle: "short",
+              dateStyle: "short",
+            })
+          : "—",
     },
     {
       field: "actions",
@@ -446,10 +503,16 @@ function CustomersSection() {
       width: 90,
       sortable: false,
       renderCell: (params) => (
-        <Tooltip title="View orders">
-          <IconButton size="small" onClick={() => setOrdersDialogFor(params.row as Customer)}>
-            <VisibilityIcon fontSize="small" />
-          </IconButton>
+        <Tooltip title={params.row.orders_count ? "View orders" : "No orders yet"}>
+          <span>
+            <IconButton
+              size="small"
+              disabled={!params.row.orders_count}
+              onClick={() => setOrdersDialogFor(params.row as Customer)}
+            >
+              <VisibilityIcon fontSize="small" />
+            </IconButton>
+          </span>
         </Tooltip>
       ),
     },
@@ -469,7 +532,7 @@ function CustomersSection() {
           <TextField
             fullWidth
             size="small"
-            placeholder="Search by name, phone or district…"
+            placeholder="Search by name, email, phone or district…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
@@ -541,6 +604,13 @@ function CustomersSection() {
           orderId={selectedOrderId}
         />
       )}
+
+      <Snackbar
+        open={Boolean(snackbar)}
+        autoHideDuration={2500}
+        onClose={() => setSnackbar(null)}
+        message={snackbar}
+      />
     </>
   );
 }
