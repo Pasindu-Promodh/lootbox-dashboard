@@ -25,7 +25,6 @@ export interface Order {
   created_at: string;
   /** Links the order to the logged-in auth user who placed it (Google OAuth) */
   user_id: string | null;
-  user_id: string | null;
 
   pre_discount_subtotal: number;
   subtotal: number;
