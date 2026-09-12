@@ -6,8 +6,9 @@ export default function Login() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  const redirectToUrl = import.meta.env.VITE_REDIRECT_TO;
-  //  || window.location.origin;
+  const redirectToUrl =
+    import.meta.env.VITE_REDIRECT_TO ||
+    `${window.location.origin}${window.location.pathname}`;
 
   const signInWithGoogle = async () => {
     setError("");
