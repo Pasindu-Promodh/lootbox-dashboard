@@ -1,73 +1,60 @@
-# React + TypeScript + Vite
+# Pickio dashboard
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Admin dashboard for the Pickio store: products, bulk import, orders, finance, customers and admin users. React 19 + MUI + Vite on Supabase. Deployed to `https://pasindu-promodh.github.io/lootbox-dashboard/`.
 
-Currently, two official plugins are available:
+## Local development
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
-
-## React Compiler
-
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+cp .env.example .env   # VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY, VITE_REDIRECT_TO (optional)
+npm install
+npm run dev            # http://localhost:5173/lootbox-dashboard/
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+`VITE_REDIRECT_TO` defaults to the current page URL. Whatever is used must be in Supabase → Authentication → Redirect URLs.
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+## Access control
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+Sign-in is Google OAuth. A user can use the dashboard only if they have a row in `admin_users`:
+
+| Role | Can do |
+| --- | --- |
+| `super_admin` | Everything, including inviting, re-roling and removing admins |
+| `admin` | Manage products, categories and orders |
+| `viewer` | Read-only |
+
+The UI hides actions by role, but **the database enforces it**: RLS policies in `supabase-sql/` and role checks in the edge functions. Apply the SQL in this order in the Supabase SQL editor:
+
+1. `admin_users_policies.sql` (also defines `current_admin_role()`)
+2. `viewer_readonly_policies.sql`
+3. `security_hardening.sql`:
+   - last-super-admin guard
+   - cost prices hidden from the public
+   - customers read orders only through `orders_public`
+   - `mark_order_delivered` uses the session user
+   - `status` kept in sync with `status_log`
+   - stock tracking
+   - profile inserts
+   - viewer-proof image policies
+   - `products2` locked down
+
+All three are re-runnable and were tested against a copy of the live schema. Apply them **before** deploying the dashboard, because the product form sends the new `stock` column.
+
+## Stock
+
+A product's `stock` is optional. Leave it empty to manage availability with the In Stock switch, or set a number: orders reduce it (atomically, via the storefront's `create-order`), cancelling an order returns it, and In Stock turns off at 0.
+
+## Edge functions
+
+```bash
+supabase functions deploy invite-admin
+supabase functions deploy list-customers
 ```
+
+- `invite-admin`: super admins only; adds a user (creating a placeholder auth user if needed) to `admin_users`.
+- `list-customers`: any admin; lists auth users for the Customers tab.
+
+Both allow browser calls only from `localhost:5173` and the GitHub Pages origin (`ALLOWED_ORIGINS`).
+
+## Deploying
+
+Pushing to `main` lints, builds and publishes `dist/` to `gh-pages`. Repository secrets: `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `VITE_REDIRECT_TO`.

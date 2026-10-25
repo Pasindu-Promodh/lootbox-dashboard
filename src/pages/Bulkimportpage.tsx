@@ -71,14 +71,17 @@ const RowThumbnail = ({
   fallbackUrl: string;
   missing: boolean;
 }) => {
-  const [src, setSrc] = useState<string>("");
+  const objectUrl = useMemo(
+    () => (file ? URL.createObjectURL(file) : null),
+    [file]
+  );
 
   useEffect(() => {
-    if (!file) { setSrc(fallbackUrl); return; }
-    const url = URL.createObjectURL(file);
-    setSrc(url);
-    return () => URL.revokeObjectURL(url);
-  }, [file, fallbackUrl]);
+    if (!objectUrl) return;
+    return () => URL.revokeObjectURL(objectUrl);
+  }, [objectUrl]);
+
+  const src = objectUrl ?? fallbackUrl;
 
   return (
     <Box
@@ -432,6 +435,7 @@ export default function BulkImportPage() {
           price: sellingPrice,
           featured: false,
           in_stock: true,
+          stock: null,
           on_sale: false,
         });
         if (!success) throw new Error("addProduct returned false");
@@ -585,8 +589,7 @@ export default function BulkImportPage() {
                 <input
                   hidden
                   type="file"
-                  // @ts-ignore
-                  webkitdirectory=""
+                  {...{ webkitdirectory: "" }}
                   onChange={handleFolderPick}
                 />
               </Button>

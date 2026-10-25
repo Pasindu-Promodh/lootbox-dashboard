@@ -21,6 +21,8 @@ export type Product = {
   price: number;
   featured: boolean;
   in_stock: boolean;
+  /** Units on hand; null = not tracked (only the in_stock flag is used). */
+  stock: number | null;
   on_sale: boolean;
   sold_count: number;
   added_date: string;
@@ -30,61 +32,10 @@ export type Product = {
    Helpers
 ========================= */
 
-// function mapProduct(p: any): Product {
-//   return {
-//     id: p.id,
-//     name: p.name,
-//     description: p.description,
-//     images: Array.isArray(p.images) ? p.images : [],
-//     category: p.category,
-//     sub_category: p.sub_category,
-//     original_price: Number(p.original_price),
-//     price: Number(p.price),
-//     discount: Number(p.discount),
-//     featured: Boolean(p.featured),
-//     in_stock: Boolean(p.in_stock),
-//     on_sale: Boolean(p.on_sale),
-//     sold_count: Number(p.sold_count),
-//     added_date: p.added_date,
-//   };
-// }
-
 /* =========================
    Fetch Products
 ========================= */
 
-// export async function getProducts({
-//   limit = 12,
-//   offset = 0,
-//   featured,
-//   orderBy = { column: "added_date", ascending: false },
-// }: {
-//   limit?: number;
-//   offset?: number;
-//   featured?: boolean;
-//   orderBy?: { column: string; ascending?: boolean };
-// } = {}): Promise<Product[]> {
-//   let query = supabase
-//     .from("products")
-//     .select("*")
-//     .order(orderBy.column, { ascending: orderBy.ascending ?? false })
-//     .range(offset, offset + limit - 1);
-
-//   if (featured !== undefined) {
-//     query = query.eq("featured", featured);
-//   }
-
-//   const { data, error } = await query;
-
-//   if (error) {
-//     console.error("Error fetching products:", error);
-//     return [];
-//   }
-
-//   return (data ?? []);
-// }
-
-// services/products.ts  — add this helper
 export async function getAllProducts(): Promise<Product[]> {
   const PAGE_SIZE = 1000;
   let all: Product[] = [];

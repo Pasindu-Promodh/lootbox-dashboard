@@ -33,7 +33,7 @@ import {
   type GridColDef,
   type GridRowSelectionModel,
 } from "@mui/x-data-grid";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import {
@@ -82,17 +82,24 @@ export default function ProductsPage() {
   const [bulkActionAnchor, setBulkActionAnchor] = useState<null | HTMLElement>(null);
   const [bulkUpdating, setBulkUpdating] = useState(false);
 
-  useEffect(() => {
-    loadProducts();
+  // Manual refresh / reload after edits (initial load happens below).
+  const loadProducts = useCallback(async () => {
+    setLoading(true);
+    setProducts(await getAllProducts());
+    setLoading(false);
   }, []);
 
-  const loadProducts = async () => {
-    setLoading(true);
-    // const data = await getProducts({ limit: 10000 }); // ← was 50, bump to 500 or whatever covers your catalog
-    const data = await getAllProducts();
-    setProducts(data);
-    setLoading(false);
-  };
+  useEffect(() => {
+    let cancelled = false;
+    getAllProducts().then((data) => {
+      if (cancelled) return;
+      setProducts(data);
+      setLoading(false);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const toggleFilter = (key: StockFilter) => {
     setActiveFilters((prev) => {
@@ -297,6 +304,19 @@ export default function ProductsPage() {
           {params.row.on_sale
             ? `${calcDiscountFromPrices(params.row.pre_discount_price, params.row.price)}%`
             : "—"}
+        </Typography>
+      ),
+    },
+    {
+      field: "stock",
+      headerName: "Stock",
+      width: 60,
+      renderCell: (params) => (
+        <Typography
+          sx={{ flex: 1, textAlign: "right" }}
+          color={params.value === 0 ? "error" : undefined}
+        >
+          {params.value ?? "—"}
         </Typography>
       ),
     },

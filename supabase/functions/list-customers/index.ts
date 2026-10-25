@@ -14,17 +14,37 @@
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-const CORS_HEADERS = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
+// Only the dashboard itself may call this function from a browser.
+const ALLOWED_ORIGINS = [
+  "http://localhost:5173",
+  "https://pasindu-promodh.github.io",
+];
+
+function corsHeadersFor(req: Request): Record<string, string> {
+  const origin = req.headers.get("origin") ?? "";
+  return ALLOWED_ORIGINS.includes(origin)
+    ? {
+        "Access-Control-Allow-Origin": origin,
+        "Access-Control-Allow-Headers":
+          "authorization, x-client-info, apikey, content-type",
+        Vary: "Origin",
+      }
+    : {};
+}
 
 const MAX_PAGES = 50; // 50 * 1000 = up to 50,000 users
 const PER_PAGE = 1000;
 
 serve(async (req) => {
+  const cors = corsHeadersFor(req);
+  const json = (body: unknown, status: number) =>
+    new Response(JSON.stringify(body), {
+      status,
+      headers: { ...cors, "Content-Type": "application/json" },
+    });
+
   if (req.method === "OPTIONS") {
-    return new Response("ok", { headers: CORS_HEADERS });
+    return new Response("ok", { headers: cors });
   }
 
   try {
@@ -97,13 +117,8 @@ serve(async (req) => {
 
     return json({ users }, 200);
   } catch (err) {
-    return json({ error: String(err) }, 500);
+    console.error(err);
+    return json({ error: "Internal error" }, 500);
   }
 });
 
-function json(body: unknown, status: number) {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
-  });
-}

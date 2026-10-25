@@ -14,7 +14,7 @@ import {
 import VisibilityIcon from "@mui/icons-material/Visibility";
 import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import { DataGrid, type GridColDef } from "@mui/x-data-grid";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { fetchAllOrders } from "../services/orders";
 import type { Order, OrderStatus } from "../types/order";
 import OrderDetailPage from "./OrderDetailPage";
@@ -51,10 +51,6 @@ export default function OrdersPage() {
     useState<OrderStatus[]>(SELECTED_STATUSES);
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
 
-  useEffect(() => {
-    loadOrders();
-  }, []);
-
   const allSelected = selectedStatuses.length === ALL_STATUSES.length;
 
   const toggleSelectAll = (checked: boolean) => {
@@ -79,12 +75,29 @@ export default function OrdersPage() {
     return counts;
   }, [orders]);
 
-  const loadOrders = async () => {
+  // Manual refresh (initial load happens in the effect below).
+  const loadOrders = useCallback(async () => {
     setLoading(true);
-    const data = await fetchAllOrders();
-    setOrders(data);
-    setLoading(false);
-  };
+    try {
+      setOrders(await fetchAllOrders());
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchAllOrders()
+      .then((data) => {
+        if (!cancelled) setOrders(data);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const filteredOrders = useMemo(() => {
     return orders.filter((o) => {

@@ -26,14 +26,36 @@
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
-const CORS_HEADERS = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
-};
+// Only the dashboard itself may call this function from a browser.
+const ALLOWED_ORIGINS = [
+  "http://localhost:5173",
+  "https://pasindu-promodh.github.io",
+];
+
+const ALLOWED_ROLES = ["super_admin", "admin", "viewer"];
+
+function corsHeadersFor(req: Request): Record<string, string> {
+  const origin = req.headers.get("origin") ?? "";
+  return ALLOWED_ORIGINS.includes(origin)
+    ? {
+        "Access-Control-Allow-Origin": origin,
+        "Access-Control-Allow-Headers":
+          "authorization, x-client-info, apikey, content-type",
+        Vary: "Origin",
+      }
+    : {};
+}
 
 serve(async (req) => {
+  const cors = corsHeadersFor(req);
+  const json = (body: unknown, status: number) =>
+    new Response(JSON.stringify(body), {
+      status,
+      headers: { ...cors, "Content-Type": "application/json" },
+    });
+
   if (req.method === "OPTIONS") {
-    return new Response("ok", { headers: CORS_HEADERS });
+    return new Response("ok", { headers: cors });
   }
 
   try {
@@ -66,13 +88,19 @@ serve(async (req) => {
       .eq("user_id", caller.id)
       .maybeSingle();
 
-    if (!callerAdminRow) {
+    // Only super admins may grant dashboard access. Without this check any
+    // admin_users row (including "viewer") could invite a second account as
+    // super_admin and escalate its own privileges.
+    if (!callerAdminRow || callerAdminRow.role !== "super_admin") {
       return json({ error: "Not authorized to invite admins" }, 403);
     }
 
-    const { email, role } = await req.json();
+    const { email, role = "admin" } = await req.json();
     if (!email || typeof email !== "string") {
       return json({ error: "email is required" }, 400);
+    }
+    if (!ALLOWED_ROLES.includes(role)) {
+      return json({ error: "Invalid role" }, 400);
     }
     const normalizedEmail = email.trim().toLowerCase();
 
@@ -122,11 +150,12 @@ serve(async (req) => {
     const { error: insertError } = await adminClient.from("admin_users").insert({
       user_id: userId,
       email: normalizedEmail,
-      role: role ?? "admin",
+      role,
     });
 
     if (insertError) {
-      return json({ error: insertError.message }, 400);
+      console.error(insertError);
+      return json({ error: "Failed to add admin" }, 400);
     }
 
     return json(
@@ -138,7 +167,8 @@ serve(async (req) => {
       200
     );
   } catch (err) {
-    return json({ error: String(err) }, 500);
+    console.error(err);
+    return json({ error: "Internal error" }, 500);
   }
 });
 
@@ -167,9 +197,3 @@ async function findUserByEmail(
   return null;
 }
 
-function json(body: unknown, status: number) {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { ...CORS_HEADERS, "Content-Type": "application/json" },
-  });
-}

@@ -76,39 +76,6 @@ export async function bulkUpdateProducts(
 /**
  * Delete a product
  */
-// export async function deleteProduct(id: string) {
-//   const { error } = await supabase.from("products").delete().eq("id", id);
-
-//   if (error) {
-//     console.error("Error deleting product:", error);
-//     return false;
-//   }
-
-//   return true;
-// }
-
-// export async function deleteProduct(id: string) {
-//   const { data: product } = await supabase
-//     .from("products")
-//     .select("images")
-//     .eq("id", id)
-//     .single();
-
-//   if (product?.images) {
-//     for (const img of product.images) {
-//       await deleteProductImage(img);
-//     }
-//   }
-
-//   const { error } = await supabase.from("products").delete().eq("id", id);
-
-//   if (error) {
-//     console.error(error);
-//     return false;
-//   }
-//   console.log("Product deleted successfully");
-//   return true;
-// }
 
 export async function deleteProduct(id: string) {
   // 1️⃣ Fetch product images
@@ -138,7 +105,7 @@ export async function deleteProduct(id: string) {
             if (index >= 0) {
               bucketPaths.push(u.pathname.slice(index + "/product-images/".length));
             }
-          } catch (err) {
+          } catch {
             console.warn("Invalid URL, skipping:", url);
           }
         });

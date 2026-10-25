@@ -143,10 +143,20 @@ function AdminsSection({
     );
   }, [admins, search]);
 
+  // Mirrors the keep_one_super_admin DB trigger (security_hardening.sql).
+  const isLastSuperAdmin = (row: AdminUser) =>
+    row.role === "super_admin" &&
+    admins.filter((a) => a.role === "super_admin").length <= 1;
+
   const handleRoleChange = async (row: AdminUser, e: SelectChangeEvent) => {
     if (!isSuperAdmin) return;
     const newRole = e.target.value;
     const prev = row.role;
+
+    if (newRole !== "super_admin" && isLastSuperAdmin(row)) {
+      setSnackbar("There must always be at least one super admin");
+      return;
+    }
 
     // optimistic update
     setAdmins((list) =>
@@ -166,6 +176,11 @@ function AdminsSection({
 
   const confirmRemove = async () => {
     if (!removeTarget || !isSuperAdmin) return;
+    if (isLastSuperAdmin(removeTarget)) {
+      setSnackbar("There must always be at least one super admin");
+      setRemoveTarget(null);
+      return;
+    }
     setRemoving(true);
     try {
       await removeAdminUser(removeTarget.user_id);
